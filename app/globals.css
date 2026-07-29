@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #faf7f3;
+  color: #2f2a26;
+}
+
+.badge {
+  @apply inline-block rounded-full px-3 py-1 text-xs font-medium;
+}
+.badge-manual {
+  @apply bg-amber-100 text-amber-800;
+}
+.badge-confirmed {
+  @apply bg-emerald-100 text-emerald-800;
+}
+.badge-cancelled {
+  @apply bg-gray-200 text-gray-500;
+}
