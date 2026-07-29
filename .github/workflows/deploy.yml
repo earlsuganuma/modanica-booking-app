@@ -1,0 +1,50 @@
+name: Deploy to VPS
+
+# main ブランチにpushされるたびに、VPS上のアプリを自動更新する。
+# 1. リポジトリの内容をVPSへ同期（rsync）
+# 2. VPS上で npm install / npm run build
+# 3. pm2 restart でアプリに反映
+#
+# 必要なリポジトリSecrets（Settings > Secrets and variables > Actions）:
+#   VPS_HOST     VPSのIPアドレス
+#   VPS_PORT     SSHポート番号
+#   VPS_USER     SSHログインユーザー（例: earlclub）
+#   VPS_SSH_KEY  デプロイ専用のSSH秘密鍵（このワークフローだけがVPSにログインできる専用鍵）
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sync files to VPS
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='.env.local' \
+            --exclude='.env.local.example' \
+            --exclude='data.json' \
+            -e "ssh -p ${{ secrets.VPS_PORT }} -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/home/earlclub/apps/modanica-booking-app/"
+
+      - name: Build and restart on VPS
+        run: |
+          ssh -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "cd /home/earlclub/apps/modanica-booking-app && npm install && npm run build && pm2 restart modanica"
