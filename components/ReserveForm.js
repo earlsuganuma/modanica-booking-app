@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import TimeAxis from "./TimeAxis";
+
+const PAYJP_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYJP_PUBLIC_KEY || "";
 
 const SLOT3_OPTIONS = [
   { id: "slot_am", label: "1部（11:00〜16:00）" },
@@ -44,6 +46,52 @@ export default function ReserveForm({ plan }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
+  // PAY.JP カード入力フォーム（payjp.js v2）
+  const cardMountRef = useRef(null);
+  const payjpRef = useRef(null);
+  const cardElementRef = useRef(null);
+  const [cardReady, setCardReady] = useState(false);
+  const [cardComplete, setCardComplete] = useState(false);
+  const [cardBrand, setCardBrand] = useState(null);
+  const [cardFormError, setCardFormError] = useState(null);
+
+  useEffect(() => {
+    if (!PAYJP_PUBLIC_KEY) return;
+    let cancelled = false;
+
+    function setup() {
+      if (cancelled || !cardMountRef.current || cardElementRef.current) return;
+      const payjp = window.Payjp(PAYJP_PUBLIC_KEY);
+      payjpRef.current = payjp;
+      const elements = payjp.elements();
+      const cardElement = elements.create("card");
+      cardElement.mount(cardMountRef.current);
+      cardElement.on("change", (e) => {
+        setCardBrand(e.brand && e.brand !== "unknown" ? e.brand : null);
+        setCardComplete(!!e.complete);
+        setCardFormError(e.error ? e.error.message : null);
+      });
+      cardElementRef.current = cardElement;
+      setCardReady(true);
+    }
+
+    if (window.Payjp) {
+      setup();
+    } else {
+      const existing = document.querySelector('script[src="https://js.pay.jp/v2/pay.js"]');
+      const script = existing || document.createElement("script");
+      if (!existing) {
+        script.src = "https://js.pay.jp/v2/pay.js";
+        document.head.appendChild(script);
+      }
+      script.addEventListener("load", setup);
+      return () => script.removeEventListener("load", setup);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const payloadBase = useMemo(
     () => ({
       planId: plan.id,
@@ -84,13 +132,35 @@ export default function ReserveForm({ plan }) {
       setError("確認事項へのご同意にチェックしてください。");
       return;
     }
+    if (PAYJP_PUBLIC_KEY && !cardComplete) {
+      setError("お支払い情報（クレジットカード）を入力してください。");
+      return;
+    }
     setSubmitting(true);
     setError(null);
+
+    let payjpToken = null;
+    if (PAYJP_PUBLIC_KEY) {
+      try {
+        const tokenRes = await payjpRef.current.createToken(cardElementRef.current);
+        if (tokenRes.error) {
+          setError(tokenRes.error.message || "カード情報の確認に失敗しました。");
+          setSubmitting(false);
+          return;
+        }
+        payjpToken = tokenRes.id;
+      } catch (e) {
+        setError("カード情報の確認に失敗しました。");
+        setSubmitting(false);
+        return;
+      }
+    }
+
     try {
       const res = await fetch("/api/reservations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payloadBase, customerName, customerEmail, customerTel, note }),
+        body: JSON.stringify({ ...payloadBase, customerName, customerEmail, customerTel, note, payjpToken }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -309,6 +379,22 @@ export default function ReserveForm({ plan }) {
         </div>
       )}
 
+      {PAYJP_PUBLIC_KEY && (
+        <div className="rounded-2xl bg-white p-6 shadow-sm space-y-3">
+          <h2 className="font-bold">お支払い情報</h2>
+          <p className="text-xs text-black/40">
+            クレジットカード決済です。ご予約確定時にお支払いが確定します（送信直後は与信枠の確保のみで、請求は発生しません）。
+          </p>
+          <div
+            ref={cardMountRef}
+            className="rounded-lg border border-black/15 px-3 py-2.5 bg-white"
+          />
+          {!cardReady && <p className="text-xs text-black/30">決済フォームを読み込み中…</p>}
+          {cardFormError && <p className="text-xs text-red-600">{cardFormError}</p>}
+          {cardBrand && !cardFormError && <p className="text-xs text-black/40">カードブランド：{cardBrand}</p>}
+        </div>
+      )}
+
       <div className="rounded-2xl bg-white p-6 shadow-sm space-y-4">
         <h2 className="font-bold">お客様情報</h2>
         <label className="block text-sm">
@@ -353,7 +439,11 @@ export default function ReserveForm({ plan }) {
 
       <button
         type="submit"
-        disabled={submitting || (requiresPriorityClause && !agreedToPriorityClause)}
+        disabled={
+          submitting ||
+          (requiresPriorityClause && !agreedToPriorityClause) ||
+          (!!PAYJP_PUBLIC_KEY && !cardComplete)
+        }
         className="w-full rounded-full bg-ink text-white px-6 py-3 font-semibold hover:opacity-90 disabled:opacity-40"
       >
         {submitting ? "送信中…" : "この内容で予約する（要確認）"}

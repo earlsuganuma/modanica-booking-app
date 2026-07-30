@@ -75,7 +75,17 @@ CREATE TABLE IF NOT EXISTS reservations (
   note TEXT,
   status TEXT NOT NULL DEFAULT 'pending_review',
   total_price INTEGER,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- PAY.JP決済関連（オーソリ＋確定方式。詳細は lib/payjpClient.js のコメントを参照）。
+  -- payment_status: none（決済なし・PAY.JP未設定時）/ authorized（与信確保済み・未確定）/
+  --   captured（支払い確定済み）/ released（与信解放・未確定のままキャンセル）/
+  --   refunded（全額返金）/ partially_refunded（一部返金）/ failed（オーソリ失敗）
+  payment_status TEXT NOT NULL DEFAULT 'none',
+  payjp_charge_id TEXT,
+  payment_amount INTEGER,
+  refunded_amount INTEGER NOT NULL DEFAULT 0,
+  card_brand TEXT,
+  card_last4 TEXT
 );
 
 CREATE TABLE IF NOT EXISTS block_holds (

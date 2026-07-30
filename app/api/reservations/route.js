@@ -9,6 +9,7 @@ const { validateFlexibleTime } = require("../../../lib/businessHours");
 const { todayStr, daysBetween } = require("../../../lib/dateUtil");
 const { sendMail, ADMIN_NOTIFY_EMAIL } = require("../../../lib/mailer");
 const { reservationReceived, adminNewReservationNotice } = require("../../../lib/emailTemplates");
+const payjpClient = require("../../../lib/payjpClient");
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ export async function POST(request) {
     customerEmail,
     customerTel,
     note,
+    payjpToken,
   } = body;
 
   const plan = await getPlan(planId);
@@ -86,6 +88,43 @@ export async function POST(request) {
   const selectedOptions = selectOptions(plan.options, optionIds, optionQuantities);
   const price = calcPrice({ plan, nightDates, guestCount, selectedOptions, slotId, optionQuantities, priceRules: data.priceRules });
 
+  // 決済（PAY.JP）：この時点ではオーソリ（与信枠の確保）のみ行い、実際の請求は
+  // 管理者が予約を「確定」に変更したタイミングで行う（lib/payjpClient.js 参照）。
+  let paymentStatus = "none";
+  let payjpChargeId = null;
+  let paymentAmount = null;
+  let cardBrand = null;
+  let cardLast4 = null;
+
+  if (price.total > 0) {
+    if (!payjpClient.isConfigured()) {
+      return NextResponse.json(
+        { error: "payment_not_configured", message: "現在オンライン決済がご利用いただけません。恐れ入りますがお電話にてご予約ください。" },
+        { status: 503 }
+      );
+    }
+    if (!payjpToken) {
+      return NextResponse.json({ error: "card_required", message: "お支払い情報（クレジットカード）を入力してください。" }, { status: 400 });
+    }
+    try {
+      const charge = await payjpClient.authorize({
+        amount: price.total,
+        token: payjpToken,
+        metadata: { planId: plan.id, customerEmail },
+      });
+      paymentStatus = "authorized";
+      payjpChargeId = charge.id;
+      paymentAmount = charge.amount;
+      cardBrand = charge.card ? charge.card.brand : null;
+      cardLast4 = charge.card ? charge.card.last4 : null;
+    } catch (e) {
+      const message =
+        (e && e.response && e.response.body && e.response.body.error && e.response.body.error.message) ||
+        "クレジットカードの決済処理に失敗しました。カード情報をご確認のうえ再度お試しください。";
+      return NextResponse.json({ error: "card_declined", message }, { status: 402 });
+    }
+  }
+
   const id = data.nextReservationId || 1;
   const reservation = {
     id,
@@ -103,6 +142,12 @@ export async function POST(request) {
     status: "pending_review", // 初期運用方針：全プラン要確認スタート
     totalPrice: price.total,
     createdAt: new Date().toISOString(),
+    paymentStatus,
+    payjpChargeId,
+    paymentAmount,
+    refundedAmount: 0,
+    cardBrand,
+    cardLast4,
   };
   data.reservations.push(reservation);
   data.nextReservationId = id + 1;
