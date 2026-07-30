@@ -4,11 +4,15 @@ const { COOKIE_NAME, verifySessionToken, isConfigured } = require("./lib/adminAu
 // 管理画面（/admin と /api/admin 配下）を専用のログインページで保護します。
 // ログイン情報は環境変数 ADMIN_BASIC_AUTH_USER / ADMIN_BASIC_AUTH_PASSWORD で設定します。
 // .env.local に設定してください（.env.local.example を参照）。
+//
+// Next.js 16でファイル名・エクスポート名が middleware → proxy に変更されたのに伴い改名。
+// proxyはNode.jsランタイムで動作する（旧middlewareのEdgeランタイムとは異なる）が、
+// lib/adminAuth.js はWeb標準のcrypto.subtle/btoaのみで実装しているため、そのままNode.js上でも動作する。
 
 const PUBLIC_ADMIN_PATHS = ["/admin/login"];
 const PUBLIC_API_PATHS = ["/api/admin/login"];
 
-export async function middleware(request) {
+export async function proxy(request) {
   const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith("/api/admin");
 

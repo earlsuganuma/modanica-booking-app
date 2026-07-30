@@ -361,6 +361,13 @@ export default function ReserveForm({ plan }) {
       <p className="text-xs text-black/40 text-center">
         送信後は「要確認」ステータスとなり、担当者が確認のうえ確定のご連絡をいたします。
       </p>
+      <p className="text-xs text-black/40 text-center">
+        ご予約は
+        <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="underline">
+          利用規約（キャンセルポリシーを含む）
+        </a>
+        に同意のうえお申し込みいただいたものとみなします。
+      </p>
     </form>
   );
 }

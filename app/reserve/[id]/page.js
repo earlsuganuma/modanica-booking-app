@@ -5,7 +5,8 @@ import ReserveForm from "../../../components/ReserveForm";
 export const dynamic = "force-dynamic";
 
 export default async function ReservePage({ params }) {
-  const plan = await getPlan(params.id);
+  const { id } = await params;
+  const plan = await getPlan(id);
   if (!plan) return notFound();
 
   return (

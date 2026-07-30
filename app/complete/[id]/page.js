@@ -4,8 +4,9 @@ import { notFound } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 export default async function CompletePage({ params }) {
+  const { id: idParam } = await params;
   const data = await load();
-  const id = Number(params.id);
+  const id = Number(idParam);
   const r = data.reservations.find((x) => x.id === id);
   if (!r) return notFound();
   const plan = data.plans.find((p) => p.id === r.planId);

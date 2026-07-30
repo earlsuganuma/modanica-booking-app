@@ -9,8 +9,9 @@ export const dynamic = "force-dynamic";
 // 管理画面専用：予約詳細の取得とステータス変更（/api/admin/* はmiddleware.jsによりログイン必須）。
 
 export async function GET(request, { params }) {
+  const { id: idParam } = await params;
   const data = await load();
-  const id = Number(params.id);
+  const id = Number(idParam);
   const r = data.reservations.find((x) => x.id === id);
   if (!r) return NextResponse.json({ error: "not_found" }, { status: 404 });
   const plan = data.plans.find((p) => p.id === r.planId);
@@ -53,13 +54,14 @@ export async function GET(request, { params }) {
 }
 
 export async function PATCH(request, { params }) {
+  const { id: idParam } = await params;
   const body = await request.json();
   const { status } = body;
   if (!["confirmed", "cancelled", "pending_review"].includes(status)) {
     return NextResponse.json({ error: "invalid_status" }, { status: 400 });
   }
   const data = await load();
-  const id = Number(params.id);
+  const id = Number(idParam);
   const r = data.reservations.find((x) => x.id === id);
   if (!r) return NextResponse.json({ error: "not_found" }, { status: 404 });
 

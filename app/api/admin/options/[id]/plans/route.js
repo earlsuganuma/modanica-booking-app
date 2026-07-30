@@ -5,12 +5,12 @@ export const dynamic = "force-dynamic";
 
 // body: { planId, attach: boolean, isDefault?: boolean }
 export async function POST(request, { params }) {
+  const { id: optionId } = await params;
   const body = await request.json();
   const { planId, attach, isDefault } = body;
   if (!planId) return NextResponse.json({ error: "plan_id_required" }, { status: 400 });
 
   const data = await load();
-  const optionId = params.id;
 
   const existingIndex = data.planOptions.findIndex((po) => po.optionId === optionId && po.planId === planId);
 

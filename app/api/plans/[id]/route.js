@@ -4,7 +4,8 @@ const { getPlan } = require("../../../../lib/plans");
 export const dynamic = "force-dynamic";
 
 export async function GET(request, { params }) {
-  const plan = await getPlan(params.id);
+  const { id } = await params;
+  const plan = await getPlan(id);
   if (!plan) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }

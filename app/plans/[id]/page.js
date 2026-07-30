@@ -7,7 +7,8 @@ const CATEGORY_LABEL = { facility: "施設利用", cafe: "カフェ" };
 const CONFIRMATION_LABEL = { manual: "要確認（担当者確認後に確定）", auto: "自動確定" };
 
 export default async function PlanDetailPage({ params }) {
-  const plan = await getPlan(params.id);
+  const { id } = await params;
+  const plan = await getPlan(id);
   if (!plan) return notFound();
 
   const manualDefault = plan.confirmationRules.find((r) => r.day_type === "all")?.confirmation_type || "manual";

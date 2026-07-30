@@ -6,9 +6,10 @@ export const dynamic = "force-dynamic";
 const VALID_CONFIRMATION = ["auto", "manual", "inquiry_only"];
 
 export async function PATCH(request, { params }) {
+  const { id } = await params;
   const body = await request.json();
   const data = await load();
-  const plan = data.plans.find((p) => p.id === params.id);
+  const plan = data.plans.find((p) => p.id === id);
   if (!plan) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   if (body.name !== undefined) plan.name = body.name;

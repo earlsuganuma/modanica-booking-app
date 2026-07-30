@@ -21,8 +21,13 @@ export default function RootLayout({ children }) {
           </div>
         </header>
         <main className="mx-auto max-w-4xl px-4 py-8">{children}</main>
-        <footer className="mx-auto max-w-4xl px-4 py-10 text-xs text-black/40">
-          MODANICA 予約管理システム（開発版プロトタイプ）
+        <footer className="mx-auto max-w-4xl px-4 py-10 text-xs text-black/40 space-y-2">
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            <a href="/legal/tokushoho" className="hover:underline">特定商取引法に基づく表記</a>
+            <a href="/legal/terms" className="hover:underline">利用規約</a>
+            <a href="/legal/privacy" className="hover:underline">プライバシーポリシー</a>
+          </div>
+          <div>運営：有限会社アールクラブ</div>
         </footer>
       </body>
     </html>
