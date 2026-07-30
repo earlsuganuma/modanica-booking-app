@@ -70,6 +70,7 @@ export async function POST(request) {
   }
 
   const { start, end, nightDates } = resolveDatetime({ timeType: plan.time_type, date, slotId, startTime, endTime });
+  console.error("DEBUG_RESERVE_DATETIME", JSON.stringify({ date, slotId, timeType: plan.time_type, start, end }));
   const resourceIds = plan.resources.map((r) => r.id);
 
   const { conflict, adjustable } = await hasConflict({
