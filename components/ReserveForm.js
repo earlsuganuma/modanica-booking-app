@@ -65,7 +65,9 @@ export default function ReserveForm({ plan }) {
       payjpRef.current = payjp;
       const elements = payjp.elements();
       const cardElement = elements.create("card");
-      cardElement.mount(cardMountRef.current);
+      // payjp.js の mount() はDOM要素ではなくCSSセレクタ文字列を受け取る仕様のため、
+      // ref先の要素にidを振ってセレクタで指定する。
+      cardElement.mount(`#${cardMountRef.current.id}`);
       cardElement.on("change", (e) => {
         setCardBrand(e.brand && e.brand !== "unknown" ? e.brand : null);
         setCardComplete(!!e.complete);
@@ -386,6 +388,7 @@ export default function ReserveForm({ plan }) {
             クレジットカード決済です。ご予約確定時にお支払いが確定します（送信直後は与信枠の確保のみで、請求は発生しません）。
           </p>
           <div
+            id="payjp-card-element"
             ref={cardMountRef}
             className="rounded-lg border border-black/15 px-3 py-2.5 bg-white"
           />
