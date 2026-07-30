@@ -45,6 +45,7 @@ export default function ReserveForm({ plan }) {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [paymentStep, setPaymentStep] = useState(null); // null | "authorize" | "3ds" | "finish"
 
   // PAY.JP カード入力フォーム（payjp.js v2）
   const cardMountRef = useRef(null);
@@ -141,7 +142,7 @@ export default function ReserveForm({ plan }) {
     setSubmitting(true);
     setError(null);
 
-    let payjpToken = null;
+    let payjpChargeId = null;
     if (PAYJP_PUBLIC_KEY) {
       try {
         const tokenRes = await payjpRef.current.createToken(cardElementRef.current);
@@ -150,19 +151,65 @@ export default function ReserveForm({ plan }) {
           setSubmitting(false);
           return;
         }
-        payjpToken = tokenRes.id;
+        const payjpToken = tokenRes.id;
+
+        // 支払い作成時の3Dセキュア：まずサーバー側で正式な料金を計算のうえ与信枠を確保する
+        // （3Dセキュア認証待ちの状態）。
+        setPaymentStep("authorize");
+        const startRes = await fetch("/api/payments/start-3ds", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payloadBase, customerEmail, payjpToken }),
+        });
+        const startData = await startRes.json();
+        if (!startRes.ok) {
+          setError(startData.message || "お支払い情報の確認に失敗しました。");
+          setSubmitting(false);
+          setPaymentStep(null);
+          return;
+        }
+
+        // カード発行会社の本人認証画面（iframe）を表示する。
+        setPaymentStep("3ds");
+        try {
+          await payjpRef.current.openThreeDSecureIframe(startData.chargeId);
+        } catch (tdsErr) {
+          const message = (tdsErr && tdsErr.error && tdsErr.error.message) || "本人認証（3Dセキュア）に失敗しました。お手数ですが再度お試しください。";
+          setError(message);
+          setSubmitting(false);
+          setPaymentStep(null);
+          return;
+        }
+
+        // 3Dセキュア認証の完了をサーバー側に反映（支払いの確定処理）。
+        setPaymentStep("finish");
+        const finishRes = await fetch("/api/payments/finish-3ds", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chargeId: startData.chargeId }),
+        });
+        const finishData = await finishRes.json();
+        if (!finishRes.ok) {
+          setError(finishData.message || "本人認証（3Dセキュア）の確認に失敗しました。お手数ですが最初からやり直してください。");
+          setSubmitting(false);
+          setPaymentStep(null);
+          return;
+        }
+        payjpChargeId = startData.chargeId;
       } catch (e) {
-        setError("カード情報の確認に失敗しました。");
+        setError("お支払い処理に失敗しました。カード情報をご確認のうえ再度お試しください。");
         setSubmitting(false);
+        setPaymentStep(null);
         return;
       }
     }
+    setPaymentStep(null);
 
     try {
       const res = await fetch("/api/reservations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payloadBase, customerName, customerEmail, customerTel, note, payjpToken }),
+        body: JSON.stringify({ ...payloadBase, customerName, customerEmail, customerTel, note, payjpChargeId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -439,6 +486,14 @@ export default function ReserveForm({ plan }) {
       </div>
 
       {error && <div className="text-sm text-red-700 bg-red-50 rounded-lg px-4 py-3">{error}</div>}
+
+      {paymentStep && (
+        <div className="text-sm text-black/60 bg-black/5 rounded-lg px-4 py-3">
+          {paymentStep === "authorize" && "お支払い情報を確認しています…"}
+          {paymentStep === "3ds" && "カード発行会社による本人認証（3Dセキュア）を行っています。画面の指示に従ってください。"}
+          {paymentStep === "finish" && "本人認証を確認しています…"}
+        </div>
+      )}
 
       <button
         type="submit"

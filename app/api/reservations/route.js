@@ -9,6 +9,7 @@ const { validateFlexibleTime } = require("../../../lib/businessHours");
 const { todayStr, daysBetween } = require("../../../lib/dateUtil");
 const { sendMail, ADMIN_NOTIFY_EMAIL } = require("../../../lib/mailer");
 const { reservationReceived, adminNewReservationNotice } = require("../../../lib/emailTemplates");
+const { checkRateLimit } = require("../../../lib/rateLimit");
 const payjpClient = require("../../../lib/payjpClient");
 
 export const dynamic = "force-dynamic";
@@ -34,8 +35,11 @@ export async function POST(request) {
     customerEmail,
     customerTel,
     note,
-    payjpToken,
+    payjpChargeId: submittedChargeId,
   } = body;
+
+  const rateLimitError = checkRateLimit(request, customerEmail);
+  if (rateLimitError) return rateLimitError;
 
   const plan = await getPlan(planId);
   if (!plan) return NextResponse.json({ error: "plan_not_found" }, { status: 404 });
@@ -88,8 +92,11 @@ export async function POST(request) {
   const selectedOptions = selectOptions(plan.options, optionIds, optionQuantities);
   const price = calcPrice({ plan, nightDates, guestCount, selectedOptions, slotId, optionQuantities, priceRules: data.priceRules });
 
-  // 決済（PAY.JP）：この時点ではオーソリ（与信枠の確保）のみ行い、実際の請求は
-  // 管理者が予約を「確定」に変更したタイミングで行う（lib/payjpClient.js 参照）。
+  // 決済（PAY.JP、3Dセキュア対応）：/api/payments/start-3ds → クライアント側3Dセキュア認証 →
+  // /api/payments/finish-3ds の順で、すでに「3Dセキュア認証済み・与信枠確保済み」の
+  // charge（支払いオブジェクト）が作られている前提。ここではそのchargeIdを受け取り、
+  // PAY.JP側から金額・3Dセキュア状態を取得して改ざん・流用がないか検証したうえで予約を作成する。
+  // 実際の請求は管理者が予約を「確定」に変更したタイミングで行う（lib/payjpClient.js 参照）。
   let paymentStatus = "none";
   let payjpChargeId = null;
   let paymentAmount = null;
@@ -103,24 +110,33 @@ export async function POST(request) {
         { status: 503 }
       );
     }
-    if (!payjpToken) {
+    if (!submittedChargeId) {
       return NextResponse.json({ error: "card_required", message: "お支払い情報（クレジットカード）を入力してください。" }, { status: 400 });
     }
+    // 同じchargeIdが既に他の予約で使われていないか確認する（流用・二重送信対策）。
+    if (data.reservations.some((r) => r.payjpChargeId === submittedChargeId)) {
+      return NextResponse.json({ error: "card_declined", message: "このお支払い情報はすでに使用されています。お手数ですが最初からやり直してください。" }, { status: 402 });
+    }
     try {
-      const charge = await payjpClient.authorize({
-        amount: price.total,
-        token: payjpToken,
-        metadata: { planId: plan.id, customerEmail },
-      });
+      const charge = await payjpClient.retrieveCharge(submittedChargeId);
+      if (charge.three_d_secure_status === "unverified" || charge.three_d_secure_status === "error") {
+        return NextResponse.json(
+          { error: "three_d_secure_incomplete", message: "本人認証（3Dセキュア）が完了していません。お手数ですが最初からやり直してください。" },
+          { status: 402 }
+        );
+      }
+      if (charge.amount !== price.total) {
+        // 金額が一致しない＝改ざんの可能性があるため、確保した与信枠を解放して予約を拒否する。
+        await payjpClient.refund(submittedChargeId).catch(() => {});
+        return NextResponse.json({ error: "amount_mismatch", message: "お支払い金額の確認に失敗しました。恐れ入りますが最初からやり直してください。" }, { status: 402 });
+      }
       paymentStatus = "authorized";
       payjpChargeId = charge.id;
       paymentAmount = charge.amount;
       cardBrand = charge.card ? charge.card.brand : null;
       cardLast4 = charge.card ? charge.card.last4 : null;
     } catch (e) {
-      const message =
-        (e && e.response && e.response.body && e.response.body.error && e.response.body.error.message) ||
-        "クレジットカードの決済処理に失敗しました。カード情報をご確認のうえ再度お試しください。";
+      const message = (e && e.payjpError && e.payjpError.message) || "クレジットカードの決済処理に失敗しました。カード情報をご確認のうえ再度お試しください。";
       return NextResponse.json({ error: "card_declined", message }, { status: 402 });
     }
   }
