@@ -42,6 +42,12 @@ export async function PATCH(request, { params }) {
     }
   }
 
+  if (body.images !== undefined) {
+    plan.images = Array.isArray(body.images)
+      ? body.images.filter((u) => typeof u === "string" && u).slice(0, 3)
+      : [];
+  }
+
   if (body.confirmation) {
     const { weekday, weekend_holiday: weekendHoliday } = body.confirmation;
     if (weekday && !VALID_CONFIRMATION.includes(weekday)) {

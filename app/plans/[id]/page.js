@@ -1,5 +1,6 @@
 const { getPlan } = require("../../../lib/plans");
 import { notFound } from "next/navigation";
+import PlanImageSlideshow from "../../../components/PlanImageSlideshow";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,8 @@ export default async function PlanDetailPage({ params }) {
       </div>
 
       <div className="rounded-2xl bg-white p-6 shadow-sm space-y-4">
+        {plan.images && plan.images.length > 0 && <PlanImageSlideshow images={plan.images} />}
+
         <h1 className="text-2xl font-bold">{plan.name}</h1>
         <p className="text-black/70 leading-relaxed">{plan.description}</p>
 
@@ -48,11 +51,20 @@ export default async function PlanDetailPage({ params }) {
         {plan.options.length > 0 && (
           <div className="border-t border-black/10 pt-4">
             <div className="text-black/40 text-sm mb-2">選択可能オプション</div>
-            <ul className="text-sm space-y-1">
+            <ul className="text-sm space-y-2">
               {plan.options.map((o) => (
-                <li key={o.id} className="flex justify-between">
-                  <span>{o.name}{o.is_default ? "（デフォルト）" : ""}</span>
-                  <span>{o.price ? `+¥${o.price.toLocaleString()}` : "無料"}</span>
+                <li key={o.id} className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2">
+                    {o.imageUrl && (
+                      <img
+                        src={o.imageUrl}
+                        alt=""
+                        className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                      />
+                    )}
+                    {o.name}{o.is_default ? "（デフォルト）" : ""}
+                  </span>
+                  <span className="flex-shrink-0">{o.price ? `+¥${o.price.toLocaleString()}` : "無料"}</span>
                 </li>
               ))}
             </ul>

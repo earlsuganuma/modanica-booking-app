@@ -41,7 +41,99 @@ function UnitLabelField({ value, onChange }) {
   );
 }
 
-function OptionEditor({ option, plans, onSaved }) {
+function OptionThumbnailManager({ option, onSaved }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setError("");
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("kind", "options");
+      formData.append("id", option.id);
+      const uploadRes = await fetch("/api/admin/upload", { method: "POST", body: formData });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) {
+        setError(uploadData.message || "アップロードに失敗しました。");
+        setUploading(false);
+        return;
+      }
+      const previousUrl = option.imageUrl;
+      await fetch(`/api/admin/options/${option.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: uploadData.url }),
+      });
+      if (previousUrl) {
+        await fetch("/api/admin/upload", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: previousUrl }),
+        });
+      }
+      await onSaved();
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleRemove() {
+    const url = option.imageUrl;
+    await fetch(`/api/admin/options/${option.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageUrl: null }),
+    });
+    if (url) {
+      await fetch("/api/admin/upload", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+    }
+    await onSaved();
+  }
+
+  return (
+    <div>
+      <span className="text-sm text-black/50">サムネイル画像</span>
+      <div className="mt-2 flex items-center gap-3">
+        {option.imageUrl ? (
+          <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-black/10">
+            <img src={option.imageUrl} alt="" className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={handleRemove}
+              className="absolute top-0.5 right-0.5 bg-black/60 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+              aria-label="削除"
+            >
+              ×
+            </button>
+          </div>
+        ) : (
+          <label className="w-16 h-16 rounded-lg border border-dashed border-black/20 flex items-center justify-center text-[10px] text-black/40 cursor-pointer hover:bg-black/5 text-center px-1">
+            {uploading ? "アップロード中…" : "＋ 画像追加"}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleUpload}
+              disabled={uploading}
+              className="hidden"
+            />
+          </label>
+        )}
+      </div>
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+    </div>
+  );
+}
+
+function OptionEditor({ option, plans, onSaved, onMoveUp, onMoveDown, isFirst, isLast }) {
   const [expanded, setExpanded] = useState(false);
   const [form, setForm] = useState({
     name: option.name,
@@ -96,25 +188,54 @@ function OptionEditor({ option, plans, onSaved }) {
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between px-5 py-4 text-left"
       >
-        <div>
-          <span className="font-bold">{option.name}</span>{" "}
-          <span className="text-black/50 text-sm">
-            {option.price ? `+¥${option.price.toLocaleString()}` : "無料"}
-            {option.unit === "quantity" ? `／${option.unitLabel || "個"}` : ""}
-          </span>
-          {option.unit === "quantity" && (
-            <span className="ml-2 badge" style={{ background: "#e0e7ff", color: "#3730a3" }}>
-              数量指定
-              {option.maxQuantity != null ? `（最大${option.maxQuantity}${option.unitLabel || "個"}）` : ""}
-            </span>
+        <div className="flex items-center gap-3">
+          {option.imageUrl && (
+            <img src={option.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
           )}
-          {option.description && <div className="text-xs text-black/40">{option.description}</div>}
+          <div>
+            <span className="font-bold">{option.name}</span>{" "}
+            <span className="text-black/50 text-sm">
+              {option.price ? `+¥${option.price.toLocaleString()}` : "無料"}
+              {option.unit === "quantity" ? `／${option.unitLabel || "個"}` : ""}
+            </span>
+            {option.unit === "quantity" && (
+              <span className="ml-2 badge" style={{ background: "#e0e7ff", color: "#3730a3" }}>
+                数量指定
+                {option.maxQuantity != null ? `（最大${option.maxQuantity}${option.unitLabel || "個"}）` : ""}
+              </span>
+            )}
+            {option.description && <div className="text-xs text-black/40">{option.description}</div>}
+          </div>
         </div>
-        <span className="text-xs text-black/40">{expanded ? "閉じる" : "編集する"}</span>
+        <span className="flex items-center gap-2">
+          <span className="flex flex-col">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+              disabled={isFirst}
+              className="text-black/40 hover:text-black disabled:opacity-20 leading-none text-xs"
+              aria-label="上に移動"
+            >
+              ▲
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+              disabled={isLast}
+              className="text-black/40 hover:text-black disabled:opacity-20 leading-none text-xs"
+              aria-label="下に移動"
+            >
+              ▼
+            </button>
+          </span>
+          <span className="text-xs text-black/40">{expanded ? "閉じる" : "編集する"}</span>
+        </span>
       </button>
 
       {expanded && (
         <div className="px-5 pb-5 border-t border-black/10 pt-4 space-y-4">
+          <OptionThumbnailManager option={option} onSaved={onSaved} />
+
           <div className="grid sm:grid-cols-4 gap-3 text-sm">
             <label className="block sm:col-span-2">
               <span className="text-black/50">オプション名</span>
@@ -274,6 +395,20 @@ export default function AdminOptionsPage() {
     load();
   }
 
+  async function handleMove(index, direction) {
+    const target = index + direction;
+    if (target < 0 || target >= options.length) return;
+    const reordered = [...options];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    setOptions(reordered);
+    await fetch("/api/admin/options/reorder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderedIds: reordered.map((o) => o.id) }),
+    });
+    await load();
+  }
+
   return (
     <div className="space-y-6">
       <AdminNav />
@@ -358,8 +493,17 @@ export default function AdminOptionsPage() {
         <p className="text-sm text-black/40">読み込み中…</p>
       ) : (
         <div className="space-y-3">
-          {options.map((o) => (
-            <OptionEditor key={o.id} option={o} plans={plans} onSaved={load} />
+          {options.map((o, i) => (
+            <OptionEditor
+              key={o.id}
+              option={o}
+              plans={plans}
+              onSaved={load}
+              onMoveUp={() => handleMove(i, -1)}
+              onMoveDown={() => handleMove(i, 1)}
+              isFirst={i === 0}
+              isLast={i === options.length - 1}
+            />
           ))}
           {options.length === 0 && <p className="text-sm text-black/40">オプションはまだありません。</p>}
         </div>

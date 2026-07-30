@@ -31,6 +31,8 @@ jobs:
           ssh-keyscan -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Sync files to VPS
+        # public/uploads: 管理画面からアップロードしたプラン画像・オプション画像の保存先。
+        # --deleteでVPS側の既存アップロード分が消えないよう除外している。
         run: |
           rsync -avz --delete \
             --exclude='.git' \
@@ -40,6 +42,7 @@ jobs:
             --exclude='.env.local' \
             --exclude='.env.local.example' \
             --exclude='data.json' \
+            --exclude='public/uploads' \
             -e "ssh -p ${{ secrets.VPS_PORT }} -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
             ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/home/earlclub/apps/modanica-booking-app/"
 

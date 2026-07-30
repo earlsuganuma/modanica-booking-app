@@ -25,6 +25,7 @@ export async function POST(request) {
   const data = await load();
   const seq = data.nextOptionSeq || 1;
   const id = `opt_custom_${seq}`;
+  const maxSortOrder = data.options.reduce((max, o) => Math.max(max, o.sortOrder ?? 0), -1);
   data.options.push({
     id,
     name,
@@ -33,6 +34,8 @@ export async function POST(request) {
     maxQuantity: maxQuantity === "" || maxQuantity === undefined || maxQuantity === null ? null : Number(maxQuantity),
     unitLabel: unit === "quantity" ? unitLabel || "個" : null,
     description: description || "",
+    imageUrl: null,
+    sortOrder: maxSortOrder + 1,
   });
   data.nextOptionSeq = seq + 1;
   await save(data);

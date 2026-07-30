@@ -20,6 +20,9 @@ export async function PATCH(request, { params }) {
   if (body.unitLabel !== undefined) {
     opt.unitLabel = opt.unit === "quantity" ? body.unitLabel || "個" : null;
   }
+  if (body.imageUrl !== undefined) {
+    opt.imageUrl = body.imageUrl || null;
+  }
 
   await save(data);
   return NextResponse.json({ ok: true });

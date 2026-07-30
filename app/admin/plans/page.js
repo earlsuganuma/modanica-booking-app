@@ -24,7 +24,96 @@ function resolveConfirmation(plan, dayType) {
   return "manual";
 }
 
-function PlanEditor({ plan, onSaved }) {
+function PlanImageManager({ plan, onSaved }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const images = plan.images || [];
+
+  async function handleUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (images.length >= 3) {
+      setError("画像は最大3枚までです。");
+      return;
+    }
+    setError("");
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("kind", "plans");
+      formData.append("id", plan.id);
+      const uploadRes = await fetch("/api/admin/upload", { method: "POST", body: formData });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) {
+        setError(uploadData.message || "アップロードに失敗しました。");
+        setUploading(false);
+        return;
+      }
+      const nextImages = [...images, uploadData.url];
+      await fetch(`/api/admin/plans/${plan.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images: nextImages }),
+      });
+      await onSaved();
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleRemove(url) {
+    const nextImages = images.filter((u) => u !== url);
+    await fetch(`/api/admin/plans/${plan.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ images: nextImages }),
+    });
+    await fetch("/api/admin/upload", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    await onSaved();
+  }
+
+  return (
+    <div>
+      <span className="text-sm text-black/50">プラン詳細ページの画像（最大3枚、フェード切替で表示）</span>
+      <div className="mt-2 flex flex-wrap gap-3">
+        {images.map((url) => (
+          <div key={url} className="relative w-24 h-24 rounded-lg overflow-hidden border border-black/10">
+            <img src={url} alt="" className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={() => handleRemove(url)}
+              className="absolute top-1 right-1 bg-black/60 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+              aria-label="削除"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        {images.length < 3 && (
+          <label className="w-24 h-24 rounded-lg border border-dashed border-black/20 flex items-center justify-center text-xs text-black/40 cursor-pointer hover:bg-black/5">
+            {uploading ? "アップロード中…" : "＋ 画像追加"}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleUpload}
+              disabled={uploading}
+              className="hidden"
+            />
+          </label>
+        )}
+      </div>
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+    </div>
+  );
+}
+
+function PlanEditor({ plan, onSaved, onMoveUp, onMoveDown, isFirst, isLast }) {
   const [expanded, setExpanded] = useState(false);
   const [form, setForm] = useState({
     name: plan.name,
@@ -90,7 +179,29 @@ function PlanEditor({ plan, onSaved }) {
             {plan.category === "facility" ? "施設利用" : "カフェ"} ／ ¥{plan.base_price.toLocaleString()}〜
           </span>
         </div>
-        <span className="text-xs text-black/40">{expanded ? "閉じる" : "編集する"}</span>
+        <span className="flex items-center gap-2">
+          <span className="flex flex-col">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+              disabled={isFirst}
+              className="text-black/40 hover:text-black disabled:opacity-20 leading-none text-xs"
+              aria-label="上に移動"
+            >
+              ▲
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+              disabled={isLast}
+              className="text-black/40 hover:text-black disabled:opacity-20 leading-none text-xs"
+              aria-label="下に移動"
+            >
+              ▼
+            </button>
+          </span>
+          <span className="text-xs text-black/40">{expanded ? "閉じる" : "編集する"}</span>
+        </span>
       </button>
 
       {expanded && (
@@ -99,6 +210,8 @@ function PlanEditor({ plan, onSaved }) {
             対象リソース：{plan.resources.map((r) => r.name).join(" / ")}　／
             排他性：{plan.exclusivity}　／　時間帯タイプ：{plan.time_type}（構造変更は本画面では未対応）
           </div>
+
+          <PlanImageManager plan={plan} onSaved={onSaved} />
 
           <label className="block text-sm">
             <span className="text-black/50">プラン名</span>
@@ -287,13 +400,27 @@ export default function AdminPlansPage() {
     load();
   }, []);
 
+  async function handleMove(index, direction) {
+    const target = index + direction;
+    if (target < 0 || target >= plans.length) return;
+    const reordered = [...plans];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    setPlans(reordered);
+    await fetch("/api/admin/plans/reorder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderedIds: reordered.map((p) => p.id) }),
+    });
+    await load();
+  }
+
   return (
     <div className="space-y-6">
       <AdminNav />
       <div>
         <h1 className="text-xl font-bold">プラン詳細編集</h1>
         <p className="text-sm text-black/50 mt-1">
-          プランの名称・説明・料金・人数条件・受付開始タイミング・曜日別の確定方式を編集できます。
+          プランの名称・説明・料金・人数条件・受付開始タイミング・曜日別の確定方式・画像・表示順を編集できます。
         </p>
       </div>
 
@@ -301,8 +428,16 @@ export default function AdminPlansPage() {
         <p className="text-sm text-black/40">読み込み中…</p>
       ) : (
         <div className="space-y-3">
-          {plans.map((p) => (
-            <PlanEditor key={p.id} plan={p} onSaved={load} />
+          {plans.map((p, i) => (
+            <PlanEditor
+              key={p.id}
+              plan={p}
+              onSaved={load}
+              onMoveUp={() => handleMove(i, -1)}
+              onMoveDown={() => handleMove(i, 1)}
+              isFirst={i === 0}
+              isLast={i === plans.length - 1}
+            />
           ))}
         </div>
       )}

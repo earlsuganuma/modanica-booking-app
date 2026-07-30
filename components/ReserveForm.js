@@ -327,6 +327,9 @@ export default function ReserveForm({ plan }) {
               {plan.options.map((o) =>
                 o.unit === "quantity" ? (
                   <div key={o.id} className="flex items-center gap-3 text-sm">
+                    {o.imageUrl && (
+                      <img src={o.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                    )}
                     <span className="flex-1">
                       {o.name}
                       <span className="text-black/40">
@@ -351,6 +354,9 @@ export default function ReserveForm({ plan }) {
                       checked={optionIds.includes(o.id)}
                       onChange={() => toggleOption(o.id)}
                     />
+                    {o.imageUrl && (
+                      <img src={o.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                    )}
                     <span>{o.name}</span>
                     <span className="text-black/40">{o.price ? `+¥${o.price.toLocaleString()}` : "無料"}</span>
                   </label>

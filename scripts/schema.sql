@@ -23,7 +23,9 @@ CREATE TABLE IF NOT EXISTS plans (
   booking_open_days_before INTEGER,
   final_booking_deadline_days_before INTEGER,
   slot_prices JSONB,
-  sort_order INTEGER NOT NULL DEFAULT 0
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  -- プラン詳細ページのフェード切替スライドショー用（最大3枚、URL文字列の配列）
+  images JSONB NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS plan_resources (
@@ -46,7 +48,10 @@ CREATE TABLE IF NOT EXISTS options (
   unit TEXT NOT NULL DEFAULT 'flag',
   max_quantity INTEGER,
   unit_label TEXT,
-  description TEXT
+  description TEXT,
+  -- 予約フォーム等でサムネイル表示するオプション画像（任意）
+  image_url TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS plan_options (
