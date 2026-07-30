@@ -96,6 +96,7 @@ export async function POST(request) {
     return NextResponse.json({ chargeId: charge.id, price });
   } catch (e) {
     const message = (e && e.payjpError && e.payjpError.message) || "クレジットカードの確認に失敗しました。カード情報をご確認のうえ再度お試しください。";
-    return NextResponse.json({ error: "card_declined", message }, { status: 402 });
+    // DEBUG: 原因調査のため一時的にエラー詳細をレスポンスに含める（後で削除する）
+    return NextResponse.json({ error: "card_declined", message, _debug: e && e.debugInfo }, { status: 402 });
   }
 }
