@@ -5,8 +5,15 @@ const fs = require("fs/promises");
 export const dynamic = "force-dynamic";
 
 // 管理画面からの画像アップロード（プラン画像・オプションサムネイル用）。
-// public/uploads/{kind}/{id}/ 配下にファイルを保存し、公開URL（/uploads/...）を返す。
-// このディレクトリはデプロイ時のrsyncで除外設定（.github/workflows/deploy.yml）されており、
+// uploads/{kind}/{id}/ 配下（publicフォルダの外）にファイルを保存し、
+// 配信は専用のAPIルート（/api/uploads/[...path]）経由で行う。
+//
+// 【注意】当初はpublic/uploads配下に保存しURLも/uploads/...としていたが、
+// Next.js（next start）はpublicフォルダの静的配信について起動時点の状態をキャッシュしており、
+// 起動後にAPI経由で追加したファイルが404になり続ける不具合が本番で確認されたため、
+// publicフォルダ配信には頼らず、リクエストの都度ディスクから読み込んで返す方式に変更した。
+//
+// このディレクトリ（uploads/）はデプロイ時のrsyncで除外設定（.github/workflows/deploy.yml）されており、
 // 再デプロイ時に削除されないようになっている。
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -41,22 +48,23 @@ export async function POST(request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const dir = path.join(process.cwd(), "public", "uploads", kind, id);
+  const dir = path.join(process.cwd(), "uploads", kind, id);
   await fs.mkdir(dir, { recursive: true });
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   await fs.writeFile(path.join(dir, filename), buffer);
 
-  const url = `/uploads/${kind}/${id}/${filename}`;
+  const url = `/api/uploads/${kind}/${id}/${filename}`;
   return NextResponse.json({ url });
 }
 
 // アップロード済み画像の削除（プランのimages配列・オプションのimageUrlから外した際に呼び出す）。
 export async function DELETE(request) {
   const { url } = await request.json();
-  if (typeof url !== "string" || !url.startsWith("/uploads/")) {
+  if (typeof url !== "string" || !url.startsWith("/api/uploads/") || url.includes("..")) {
     return NextResponse.json({ error: "invalid_url" }, { status: 400 });
   }
-  const filePath = path.join(process.cwd(), "public", url);
+  const relative = url.slice("/api/uploads/".length);
+  const filePath = path.join(process.cwd(), "uploads", relative);
   try {
     await fs.unlink(filePath);
   } catch (e) {
