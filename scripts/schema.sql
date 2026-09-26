@@ -25,7 +25,10 @@ CREATE TABLE IF NOT EXISTS plans (
   slot_prices JSONB,
   sort_order INTEGER NOT NULL DEFAULT 0,
   -- プラン詳細ページのフェード切替スライドショー用（最大3枚、URL文字列の配列）
-  images JSONB NOT NULL DEFAULT '[]'
+  images JSONB NOT NULL DEFAULT '[]',
+  -- 人数ごとの1泊料金（例: {"1": 8000, "2": 10000}）。未設定の人数はbase_priceにフォールバック。
+  -- 部屋のみ貸すプラン（4名部屋のみ利用・簡易部屋のみ利用）向け。
+  guest_prices JSONB
 );
 
 CREATE TABLE IF NOT EXISTS plan_resources (

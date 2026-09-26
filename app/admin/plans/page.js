@@ -132,6 +132,15 @@ function PlanEditor({ plan, onSaved, onMoveUp, onMoveDown, isFirst, isLast }) {
     weekday: resolveConfirmation(plan, "weekday"),
     weekendHoliday: resolveConfirmation(plan, "weekend_holiday"),
   });
+  const guestCountRange = [];
+  if (plan.time_type === "stay_16_11") {
+    for (let g = plan.min_guests || 1; g <= (plan.max_guests || plan.min_guests || 1); g++) guestCountRange.push(g);
+  }
+  const [guestPrices, setGuestPrices] = useState(
+    Object.fromEntries(
+      guestCountRange.map((g) => [g, plan.guest_prices && plan.guest_prices[String(g)] != null ? String(plan.guest_prices[String(g)]) : ""])
+    )
+  );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -159,6 +168,7 @@ function PlanEditor({ plan, onSaved, onMoveUp, onMoveDown, isFirst, isLast }) {
               },
             }
           : {}),
+        ...(plan.time_type === "stay_16_11" ? { guestPrices } : {}),
       }),
     });
     setSaving(false);
@@ -303,6 +313,31 @@ function PlanEditor({ plan, onSaved, onMoveUp, onMoveDown, isFirst, isLast }) {
               <p className="text-xs text-black/40 mt-1">
                 予約時に選択した枠に応じて、こちらの料金（曜日・祝日・シーズン係数を掛けた金額）が適用されます。
                 上の「基本料金」欄はプラン一覧・詳細ページの「〜円から」の目安表示にのみ使われます。
+              </p>
+            </div>
+          )}
+
+          {plan.time_type === "stay_16_11" && (
+            <div>
+              <span className="text-sm text-black/50">人数ごとの1泊料金（円）</span>
+              <div className="mt-1 grid sm:grid-cols-4 gap-3">
+                {guestCountRange.map((g) => (
+                  <label key={g} className="block text-sm">
+                    <span className="text-black/40 text-xs">{g}名</span>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder={`未設定＝¥${plan.base_price.toLocaleString()}`}
+                      value={guestPrices[g] ?? ""}
+                      onChange={(e) => setGuestPrices({ ...guestPrices, [g]: e.target.value })}
+                      className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-black/40 mt-1">
+                人数ごとに1泊あたりの料金を設定できます（空欄の人数は上の「基本料金」が使われます）。
+                連泊の場合は、宿泊日ごとにこの金額へ曜日・祝日・シーズン係数を掛けて合算されます。
               </p>
             </div>
           )}

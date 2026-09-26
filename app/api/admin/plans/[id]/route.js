@@ -48,6 +48,23 @@ export async function PATCH(request, { params }) {
       : [];
   }
 
+  if (body.guestPrices !== undefined) {
+    if (body.guestPrices === null) {
+      plan.guestPrices = null;
+    } else {
+      // { "1": 8000, "2": 10000, ... } の形。数値化できる正の値のみ保存し、
+      // 空欄（未設定）はキーごと除外してbase_priceへのフォールバックに任せる。
+      const cleaned = {};
+      for (const [guestCount, price] of Object.entries(body.guestPrices)) {
+        if (price === "" || price === null || price === undefined) continue;
+        const num = Number(price);
+        if (!Number.isFinite(num) || num < 0) continue;
+        cleaned[String(Math.round(Number(guestCount)))] = Math.round(num);
+      }
+      plan.guestPrices = Object.keys(cleaned).length > 0 ? cleaned : null;
+    }
+  }
+
   if (body.confirmation) {
     const { weekday, weekend_holiday: weekendHoliday } = body.confirmation;
     if (weekday && !VALID_CONFIRMATION.includes(weekday)) {

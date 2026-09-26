@@ -29,6 +29,7 @@ export async function POST(request) {
     startTime,
     endTime,
     guestCount,
+    nights,
     optionIds = [],
     optionQuantities = {},
     customerName,
@@ -73,7 +74,7 @@ export async function POST(request) {
     if (timeError) return NextResponse.json({ error: "invalid_time", message: timeError }, { status: 400 });
   }
 
-  const { start, end, nightDates } = resolveDatetime({ timeType: plan.time_type, date, slotId, startTime, endTime });
+  const { start, end, nightDates } = resolveDatetime({ timeType: plan.time_type, date, slotId, startTime, endTime, nights });
   const resourceIds = plan.resources.map((r) => r.id);
 
   const { conflict, adjustable } = await hasConflict({

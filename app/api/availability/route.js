@@ -16,7 +16,7 @@ const ADJUSTABLE_CONFLICT_MESSAGE =
 
 export async function POST(request) {
   const body = await request.json();
-  const { planId, date, slotId, startTime, endTime, guestCount, optionIds, optionQuantities } = body;
+  const { planId, date, slotId, startTime, endTime, guestCount, nights, optionIds, optionQuantities } = body;
 
   const plan = await getPlan(planId);
   if (!plan) return NextResponse.json({ error: "plan_not_found" }, { status: 404 });
@@ -58,6 +58,7 @@ export async function POST(request) {
     slotId,
     startTime,
     endTime,
+    nights,
   });
 
   const resourceIds = plan.resources.map((r) => r.id);

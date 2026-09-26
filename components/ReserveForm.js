@@ -22,6 +22,7 @@ export default function ReserveForm({ plan }) {
   const slotOptions = slot3OptionsWithPrice(plan);
   const [date, setDate] = useState("");
   const [slotId, setSlotId] = useState(SLOT3_OPTIONS[2].id);
+  const [nights, setNights] = useState(1);
   const [startTime, setStartTime] = useState("11:00");
   const [endTime, setEndTime] = useState("13:00");
   const [guestCount, setGuestCount] = useState(plan.min_guests || 1);
@@ -103,10 +104,11 @@ export default function ReserveForm({ plan }) {
       startTime: plan.time_type === "flexible" ? startTime : undefined,
       endTime: plan.time_type === "flexible" ? endTime : undefined,
       guestCount: Number(guestCount),
+      nights: plan.time_type === "stay_16_11" ? Number(nights) : undefined,
       optionIds,
       optionQuantities,
     }),
-    [plan, date, slotId, startTime, endTime, guestCount, optionIds, optionQuantities]
+    [plan, date, slotId, startTime, endTime, guestCount, nights, optionIds, optionQuantities]
   );
 
   async function checkAvailability() {
@@ -316,8 +318,23 @@ export default function ReserveForm({ plan }) {
           <p className="text-xs text-black/40">
             {plan.time_type === "stay_11_11" && "チェックイン 11:00 / チェックアウト 翌11:00"}
             {plan.time_type === "stay_18_11" && "チェックイン 18:00 / チェックアウト 翌11:00"}
-            {plan.time_type === "stay_16_11" && "チェックイン 16:00 / チェックアウト 翌11:00"}
+            {plan.time_type === "stay_16_11" && "チェックイン 16:00 / チェックアウト 翌11:00（連泊の場合は最終日の翌11:00）"}
           </p>
+        )}
+
+        {plan.time_type === "stay_16_11" && (
+          <label className="block text-sm">
+            <span className="text-black/50">宿泊日数</span>
+            <select
+              value={nights}
+              onChange={(e) => setNights(Number(e.target.value))}
+              className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+            >
+              {Array.from({ length: 7 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>{n}泊</option>
+              ))}
+            </select>
+          </label>
         )}
 
         {plan.options.length > 0 && (

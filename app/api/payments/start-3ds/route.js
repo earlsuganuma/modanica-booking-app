@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 // 発行済みのchargeIdを検証したうえで行う）。
 export async function POST(request) {
   const body = await request.json();
-  const { planId, date, slotId, startTime, endTime, guestCount, optionIds = [], optionQuantities = {}, customerEmail, payjpToken } = body;
+  const { planId, date, slotId, startTime, endTime, guestCount, nights, optionIds = [], optionQuantities = {}, customerEmail, payjpToken } = body;
 
   const rateLimitError = checkRateLimit(request, customerEmail);
   if (rateLimitError) return rateLimitError;
@@ -64,7 +64,7 @@ export async function POST(request) {
     if (timeError) return NextResponse.json({ error: "invalid_time", message: timeError }, { status: 400 });
   }
 
-  const { start, end, nightDates } = resolveDatetime({ timeType: plan.time_type, date, slotId, startTime, endTime });
+  const { start, end, nightDates } = resolveDatetime({ timeType: plan.time_type, date, slotId, startTime, endTime, nights });
   const resourceIds = plan.resources.map((r) => r.id);
 
   const { conflict, adjustable } = await hasConflict({
