@@ -11,6 +11,7 @@ const { sendMail, ADMIN_NOTIFY_EMAIL } = require("../../../lib/mailer");
 const { reservationReceived, adminNewReservationNotice } = require("../../../lib/emailTemplates");
 const { checkRateLimit } = require("../../../lib/rateLimit");
 const payjpClient = require("../../../lib/payjpClient");
+const { isStayPlan, resolveGuestBreakdown } = require("../../../lib/lodging");
 
 export const dynamic = "force-dynamic";
 
@@ -28,13 +29,13 @@ export async function POST(request) {
     slotId,
     startTime,
     endTime,
-    guestCount,
     nights,
     optionIds = [],
     optionQuantities = {},
     customerName,
     customerEmail,
     customerTel,
+    customerAddress,
     note,
     payjpChargeId: submittedChargeId,
   } = body;
@@ -47,6 +48,10 @@ export async function POST(request) {
   if (!customerName || !customerEmail) {
     return NextResponse.json({ error: "customer_info_required" }, { status: 400 });
   }
+  if (isStayPlan(plan) && !customerAddress) {
+    return NextResponse.json({ error: "address_required", message: "宿泊者名簿の記載のため、ご住所の入力をお願いします。" }, { status: 400 });
+  }
+  const { guestCount, guestMale, guestFemale, guestChildren, childrenCount } = resolveGuestBreakdown(plan, body);
   const data = await load();
   if (getConfirmationMode(plan, date, data.priceRules) === "inquiry_only") {
     return NextResponse.json({ error: "inquiry_only", message: INQUIRY_ONLY_MESSAGE }, { status: 409 });
@@ -91,7 +96,7 @@ export async function POST(request) {
   }
 
   const selectedOptions = selectOptions(plan.options, optionIds, optionQuantities);
-  const price = calcPrice({ plan, nightDates, guestCount, selectedOptions, slotId, optionQuantities, priceRules: data.priceRules });
+  const price = calcPrice({ plan, nightDates, guestCount, selectedOptions, slotId, optionQuantities, priceRules: data.priceRules, childrenCount });
 
   // 決済（PAY.JP、3Dセキュア対応）：/api/payments/start-3ds → クライアント側3Dセキュア認証 →
   // /api/payments/finish-3ds の順で、すでに「3Dセキュア認証済み・与信枠確保済み」の
@@ -152,9 +157,13 @@ export async function POST(request) {
     startDatetime: start,
     endDatetime: end,
     guestCount,
+    guestMale,
+    guestFemale,
+    guestChildren,
     customerName,
     customerEmail,
     customerTel: customerTel || null,
+    customerAddress: customerAddress || null,
     note: note || null,
     status: "pending_review", // 初期運用方針：全プラン要確認スタート
     totalPrice: price.total,

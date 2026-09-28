@@ -18,14 +18,22 @@ function slot3OptionsWithPrice(plan) {
   });
 }
 
+const STAY_TIME_TYPES = ["stay_11_11", "stay_18_11", "stay_16_11"];
+
 export default function ReserveForm({ plan }) {
   const slotOptions = slot3OptionsWithPrice(plan);
+  const isStayPlan = STAY_TIME_TYPES.includes(plan.time_type);
   const [date, setDate] = useState("");
   const [slotId, setSlotId] = useState(SLOT3_OPTIONS[2].id);
   const [nights, setNights] = useState(1);
   const [startTime, setStartTime] = useState("11:00");
   const [endTime, setEndTime] = useState("13:00");
   const [guestCount, setGuestCount] = useState(plan.min_guests || 1);
+  const [guestMale, setGuestMale] = useState(0);
+  const [guestFemale, setGuestFemale] = useState(0);
+  const [guestChildren, setGuestChildren] = useState(0);
+  const stayGuestTotal = (Number(guestMale) || 0) + (Number(guestFemale) || 0) + (Number(guestChildren) || 0);
+  const [customerAddress, setCustomerAddress] = useState("");
   const [optionIds, setOptionIds] = useState(
     plan.options.filter((o) => o.unit !== "quantity" && o.is_default).map((o) => o.id)
   );
@@ -103,12 +111,15 @@ export default function ReserveForm({ plan }) {
       slotId: plan.time_type === "slot3" ? slotId : undefined,
       startTime: plan.time_type === "flexible" ? startTime : undefined,
       endTime: plan.time_type === "flexible" ? endTime : undefined,
-      guestCount: Number(guestCount),
+      guestCount: isStayPlan ? stayGuestTotal : Number(guestCount),
+      guestMale: isStayPlan ? Number(guestMale) || 0 : undefined,
+      guestFemale: isStayPlan ? Number(guestFemale) || 0 : undefined,
+      guestChildren: isStayPlan ? Number(guestChildren) || 0 : undefined,
       nights: plan.time_type === "stay_16_11" ? Number(nights) : undefined,
       optionIds,
       optionQuantities,
     }),
-    [plan, date, slotId, startTime, endTime, guestCount, nights, optionIds, optionQuantities]
+    [plan, date, slotId, startTime, endTime, guestCount, isStayPlan, stayGuestTotal, guestMale, guestFemale, guestChildren, nights, optionIds, optionQuantities]
   );
 
   async function checkAvailability() {
@@ -139,6 +150,10 @@ export default function ReserveForm({ plan }) {
     }
     if (PAYJP_PUBLIC_KEY && !cardComplete) {
       setError("お支払い情報（クレジットカード）を入力してください。");
+      return;
+    }
+    if (isStayPlan && !customerAddress) {
+      setError("宿泊者名簿の記載のため、ご住所の入力をお願いします。");
       return;
     }
     setSubmitting(true);
@@ -211,7 +226,7 @@ export default function ReserveForm({ plan }) {
       const res = await fetch("/api/reservations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payloadBase, customerName, customerEmail, customerTel, note, payjpChargeId }),
+        body: JSON.stringify({ ...payloadBase, customerName, customerEmail, customerTel, customerAddress: isStayPlan ? customerAddress : undefined, note, payjpChargeId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -253,19 +268,71 @@ export default function ReserveForm({ plan }) {
             />
           </label>
 
-          <label className="block text-sm">
-            <span className="text-black/50">人数</span>
-            <input
-              type="number"
-              min={plan.min_guests || 1}
-              max={plan.max_guests || 99}
-              required
-              value={guestCount}
-              onChange={(e) => setGuestCount(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
-            />
-          </label>
+          {!isStayPlan && (
+            <label className="block text-sm">
+              <span className="text-black/50">人数</span>
+              <input
+                type="number"
+                min={plan.min_guests || 1}
+                max={plan.max_guests || 99}
+                required
+                value={guestCount}
+                onChange={(e) => setGuestCount(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+              />
+            </label>
+          )}
         </div>
+
+        {isStayPlan && (
+          <div className="space-y-2">
+            <span className="text-sm text-black/50">
+              人数（宿泊者名簿のため、男性・女性・子供の内訳をご入力ください）
+            </span>
+            <div className="grid grid-cols-3 gap-3">
+              <label className="block text-sm">
+                <span className="text-black/40 text-xs">男性</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={guestMale}
+                  onChange={(e) => setGuestMale(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-black/40 text-xs">女性</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={guestFemale}
+                  onChange={(e) => setGuestFemale(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-black/40 text-xs">子供（4〜12歳）</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={guestChildren}
+                  onChange={(e) => setGuestChildren(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+                />
+              </label>
+            </div>
+            <p className="text-xs text-black/40">
+              合計 {stayGuestTotal}名
+              {(plan.time_type === "stay_16_11") && Number(guestChildren) > 0 && "（子供料金は宿泊料金の70%）"}
+            </p>
+            {plan.min_guests != null && stayGuestTotal > 0 && stayGuestTotal < plan.min_guests && (
+              <p className="text-xs text-red-600">このプランは最少{plan.min_guests}名からです。</p>
+            )}
+            {plan.max_guests != null && stayGuestTotal > plan.max_guests && (
+              <p className="text-xs text-red-600">このプランは最大{plan.max_guests}名までです。</p>
+            )}
+          </div>
+        )}
 
         {(plan.time_type === "slot3" || plan.time_type === "flexible") && (
           <TimeAxis resourceIds={plan.resources.map((r) => r.id)} date={date} />
@@ -497,6 +564,17 @@ export default function ReserveForm({ plan }) {
             className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
           />
         </label>
+        {isStayPlan && (
+          <label className="block text-sm">
+            <span className="text-black/50">ご住所（宿泊者名簿のため必須）</span>
+            <input
+              required
+              value={customerAddress}
+              onChange={(e) => setCustomerAddress(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+            />
+          </label>
+        )}
         <label className="block text-sm">
           <span className="text-black/50">ご要望・備考</span>
           <textarea

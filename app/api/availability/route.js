@@ -7,6 +7,7 @@ const { calcPrice, selectOptions } = require("../../../lib/pricing");
 const { getConfirmationMode, INQUIRY_ONLY_MESSAGE } = require("../../../lib/salesRules");
 const { validateFlexibleTime } = require("../../../lib/businessHours");
 const { todayStr, daysBetween } = require("../../../lib/dateUtil");
+const { resolveGuestBreakdown } = require("../../../lib/lodging");
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,13 @@ const ADJUSTABLE_CONFLICT_MESSAGE =
 
 export async function POST(request) {
   const body = await request.json();
-  const { planId, date, slotId, startTime, endTime, guestCount, nights, optionIds, optionQuantities } = body;
+  const { planId, date, slotId, startTime, endTime, nights, optionIds, optionQuantities } = body;
 
   const plan = await getPlan(planId);
   if (!plan) return NextResponse.json({ error: "plan_not_found" }, { status: 404 });
   if (!date) return NextResponse.json({ error: "date_required" }, { status: 400 });
+
+  const { guestCount, childrenCount } = resolveGuestBreakdown(plan, body);
 
   const data = await load();
 
@@ -78,6 +81,7 @@ export async function POST(request) {
     slotId,
     optionQuantities: optionQuantities || {},
     priceRules: data.priceRules,
+    childrenCount,
   });
 
   return NextResponse.json({

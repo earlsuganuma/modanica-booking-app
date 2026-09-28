@@ -9,6 +9,7 @@ const { validateFlexibleTime } = require("../../../../lib/businessHours");
 const { todayStr, daysBetween } = require("../../../../lib/dateUtil");
 const { checkRateLimit } = require("../../../../lib/rateLimit");
 const payjpClient = require("../../../../lib/payjpClient");
+const { resolveGuestBreakdown } = require("../../../../lib/lodging");
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export const dynamic = "force-dynamic";
 // 発行済みのchargeIdを検証したうえで行う）。
 export async function POST(request) {
   const body = await request.json();
-  const { planId, date, slotId, startTime, endTime, guestCount, nights, optionIds = [], optionQuantities = {}, customerEmail, payjpToken } = body;
+  const { planId, date, slotId, startTime, endTime, nights, optionIds = [], optionQuantities = {}, customerEmail, payjpToken } = body;
 
   const rateLimitError = checkRateLimit(request, customerEmail);
   if (rateLimitError) return rateLimitError;
@@ -36,6 +37,8 @@ export async function POST(request) {
 
   const plan = await getPlan(planId);
   if (!plan) return NextResponse.json({ error: "plan_not_found" }, { status: 404 });
+
+  const { guestCount, childrenCount } = resolveGuestBreakdown(plan, body);
 
   const data = await load();
   if (getConfirmationMode(plan, date, data.priceRules) === "inquiry_only") {
@@ -81,7 +84,7 @@ export async function POST(request) {
   }
 
   const selectedOptions = selectOptions(plan.options, optionIds, optionQuantities);
-  const price = calcPrice({ plan, nightDates, guestCount, selectedOptions, slotId, optionQuantities, priceRules: data.priceRules });
+  const price = calcPrice({ plan, nightDates, guestCount, selectedOptions, slotId, optionQuantities, priceRules: data.priceRules, childrenCount });
 
   if (price.total <= 0) {
     return NextResponse.json({ error: "payment_not_required" }, { status: 400 });

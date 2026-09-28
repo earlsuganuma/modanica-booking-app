@@ -47,7 +47,15 @@ export default function AdminReservationsPage() {
       <AdminNav />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">予約一覧</h1>
-        <button onClick={load} className="text-xs underline text-black/40">再読み込み</button>
+        <div className="flex items-center gap-3">
+          <a
+            href="/api/admin/reservations/lodger-csv"
+            className="text-xs rounded-full border border-black/20 px-3 py-1.5 hover:bg-black/5"
+          >
+            宿泊者名簿をCSV出力
+          </a>
+          <button onClick={load} className="text-xs underline text-black/40">再読み込み</button>
+        </div>
       </div>
 
       <div className="flex gap-2 text-xs">
@@ -96,7 +104,11 @@ export default function AdminReservationsPage() {
                 </div>
               </div>
               <div className="mt-2 grid sm:grid-cols-3 gap-2 text-sm text-black/60">
-                <div>お客様：{r.customer_name}（{r.guest_count}名）</div>
+                <div>
+                  お客様：{r.customer_name}（{r.guest_count}名
+                  {r.guest_male != null ? `：男${r.guest_male}・女${r.guest_female}・子${r.guest_children}` : ""}
+                  ）
+                </div>
                 <div>連絡先：{r.customer_email} {r.customer_tel}</div>
                 <div>金額：¥{r.total_price.toLocaleString()}</div>
               </div>

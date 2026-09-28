@@ -101,7 +101,15 @@ export default function AdminReservationDetail({ id }) {
             </div>
             <div className="space-y-1">
               <div className="text-black/40 text-xs">人数</div>
-              <div>{reservation.guest_count}名</div>
+              <div>
+                {reservation.guest_count}名
+                {reservation.guest_male != null && (
+                  <span className="text-black/40 text-xs">
+                    {" "}
+                    （男性{reservation.guest_male}・女性{reservation.guest_female}・子供{reservation.guest_children}）
+                  </span>
+                )}
+              </div>
             </div>
             <div className="space-y-1">
               <div className="text-black/40 text-xs">お客様名</div>
@@ -111,6 +119,12 @@ export default function AdminReservationDetail({ id }) {
               <div className="text-black/40 text-xs">連絡先</div>
               <div>{reservation.customer_email}{reservation.customer_tel ? ` / ${reservation.customer_tel}` : ""}</div>
             </div>
+            {reservation.customer_address && (
+              <div className="space-y-1">
+                <div className="text-black/40 text-xs">ご住所</div>
+                <div>{reservation.customer_address}</div>
+              </div>
+            )}
             <div className="space-y-1">
               <div className="text-black/40 text-xs">金額</div>
               <div className="font-bold">¥{reservation.total_price.toLocaleString()}</div>

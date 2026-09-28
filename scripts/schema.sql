@@ -77,9 +77,15 @@ CREATE TABLE IF NOT EXISTS reservations (
   start_datetime TIMESTAMPTZ NOT NULL,
   end_datetime TIMESTAMPTZ NOT NULL,
   guest_count INTEGER,
+  -- 宿泊系プラン（BBQ＋宿泊貸切・飲み会＋宿泊貸切・4名部屋のみ利用・簡易部屋のみ利用）の
+  -- 宿泊者名簿（旅館業法対応）用の人数内訳・住所。宿泊を伴わないプランでは未使用（NULL）。
+  guest_male INTEGER,
+  guest_female INTEGER,
+  guest_children INTEGER,
   customer_name TEXT,
   customer_email TEXT,
   customer_tel TEXT,
+  customer_address TEXT,
   note TEXT,
   status TEXT NOT NULL DEFAULT 'pending_review',
   total_price INTEGER,
