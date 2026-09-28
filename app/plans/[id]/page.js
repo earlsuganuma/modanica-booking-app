@@ -27,7 +27,7 @@ export default async function PlanDetailPage({ params }) {
         {plan.images && plan.images.length > 0 && <PlanImageSlideshow images={plan.images} />}
 
         <h1 className="text-2xl font-bold">{plan.name}</h1>
-        <p className="text-black/70 leading-relaxed">{plan.description}</p>
+        <p className="text-black/70 leading-relaxed whitespace-pre-wrap">{plan.description}</p>
 
         <dl className="grid sm:grid-cols-2 gap-4 text-sm border-t border-black/10 pt-4">
           <div>

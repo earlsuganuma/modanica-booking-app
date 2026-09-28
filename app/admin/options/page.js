@@ -204,7 +204,7 @@ function OptionEditor({ option, plans, onSaved, onMoveUp, onMoveDown, isFirst, i
                 {option.maxQuantity != null ? `（最大${option.maxQuantity}${option.unitLabel || "個"}）` : ""}
               </span>
             )}
-            {option.description && <div className="text-xs text-black/40">{option.description}</div>}
+            {option.description && <div className="text-xs text-black/40 whitespace-pre-wrap">{option.description}</div>}
           </div>
         </div>
         <span className="flex items-center gap-2">
@@ -257,9 +257,10 @@ function OptionEditor({ option, plans, onSaved, onMoveUp, onMoveDown, isFirst, i
             </label>
             <label className="block">
               <span className="text-black/50">説明</span>
-              <input
+              <textarea
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
+                rows={2}
                 className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
               />
             </label>
@@ -444,9 +445,10 @@ export default function AdminOptionsPage() {
           </label>
           <label className="block">
             <span className="text-black/50">説明</span>
-            <input
+            <textarea
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
+              rows={2}
               className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
             />
           </label>
