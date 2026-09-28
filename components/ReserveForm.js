@@ -410,16 +410,21 @@ export default function ReserveForm({ plan }) {
             <div className="mt-2 space-y-2">
               {plan.options.map((o) =>
                 o.unit === "quantity" ? (
-                  <div key={o.id} className="flex items-center gap-3 text-sm">
+                  <div key={o.id} className="flex items-start gap-3 text-sm">
                     {o.imageUrl && (
                       <img src={o.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
                     )}
                     <span className="flex-1">
-                      {o.name}
-                      <span className="text-black/40">
-                        {" "}
-                        （{o.price ? `¥${o.price.toLocaleString()}／${o.unitLabel || "個"}` : "無料"}）
+                      <span>
+                        {o.name}
+                        <span className="text-black/40">
+                          {" "}
+                          （{o.price ? `¥${o.price.toLocaleString()}／${o.unitLabel || "個"}` : "無料"}）
+                        </span>
                       </span>
+                      {o.description && (
+                        <span className="block text-xs text-black/40 whitespace-pre-wrap">{o.description}</span>
+                      )}
                     </span>
                     <input
                       type="number"
@@ -432,17 +437,23 @@ export default function ReserveForm({ plan }) {
                     <span className="text-black/40 text-xs">{o.unitLabel || "個"}</span>
                   </div>
                 ) : (
-                  <label key={o.id} className="flex items-center gap-2 text-sm">
+                  <label key={o.id} className="flex items-start gap-2 text-sm">
                     <input
                       type="checkbox"
                       checked={optionIds.includes(o.id)}
                       onChange={() => toggleOption(o.id)}
+                      className="mt-0.5"
                     />
                     {o.imageUrl && (
                       <img src={o.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
                     )}
-                    <span>{o.name}</span>
-                    <span className="text-black/40">{o.price ? `+¥${o.price.toLocaleString()}` : "無料"}</span>
+                    <span className="flex-1">
+                      <span>{o.name}</span>{" "}
+                      <span className="text-black/40">{o.price ? `+¥${o.price.toLocaleString()}` : "無料"}</span>
+                      {o.description && (
+                        <span className="block text-xs text-black/40 whitespace-pre-wrap">{o.description}</span>
+                      )}
+                    </span>
                   </label>
                 )
               )}
