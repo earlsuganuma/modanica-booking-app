@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import TimeAxis from "./TimeAxis";
 import { includesMaleGuests } from "../lib/lodging";
+import { computeFlexibleEndTime, flexibleDurationHours } from "../lib/timeTemplates";
 
 const PAYJP_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYJP_PUBLIC_KEY || "";
 
@@ -29,7 +30,6 @@ export default function ReserveForm({ plan }) {
   const [slotId, setSlotId] = useState(SLOT3_OPTIONS[2].id);
   const [nights, setNights] = useState(1);
   const [startTime, setStartTime] = useState("11:00");
-  const [endTime, setEndTime] = useState("13:00");
   const [guestCount, setGuestCount] = useState(plan.min_guests || 1);
   const [guestMale, setGuestMale] = useState(0);
   const [guestFemale, setGuestFemale] = useState(0);
@@ -112,7 +112,6 @@ export default function ReserveForm({ plan }) {
       date,
       slotId: plan.time_type === "slot3" ? slotId : undefined,
       startTime: plan.time_type === "flexible" ? startTime : undefined,
-      endTime: plan.time_type === "flexible" ? endTime : undefined,
       guestCount: isStayPlan ? stayGuestTotal : Number(guestCount),
       guestMale: isStayPlan ? (showMaleGuests ? Number(guestMale) || 0 : 0) : undefined,
       guestFemale: isStayPlan ? Number(guestFemale) || 0 : undefined,
@@ -121,7 +120,7 @@ export default function ReserveForm({ plan }) {
       optionIds,
       optionQuantities,
     }),
-    [plan, date, slotId, startTime, endTime, guestCount, isStayPlan, showMaleGuests, stayGuestTotal, guestMale, guestFemale, guestChildren, nights, optionIds, optionQuantities]
+    [plan, date, slotId, startTime, guestCount, isStayPlan, showMaleGuests, stayGuestTotal, guestMale, guestFemale, guestChildren, nights, optionIds, optionQuantities]
   );
 
   async function checkAvailability() {
@@ -372,18 +371,10 @@ export default function ReserveForm({ plan }) {
                 className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
               />
             </label>
-            <label className="block text-sm">
-              <span className="text-black/50">終了時刻</span>
-              <input
-                type="time"
-                min="11:00"
-                max="22:00"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
-              />
-            </label>
-            <p className="text-xs text-black/40 sm:col-span-2">営業時間 11:00〜22:00 の範囲でご指定ください。</p>
+            <p className="text-xs text-black/40 sm:col-span-2">
+              ご利用時間の目安：{startTime || "11:00"}〜{computeFlexibleEndTime(plan.id, startTime)}
+              （{flexibleDurationHours(plan.id)}時間、営業終了22:00まで）
+            </p>
           </div>
         )}
 

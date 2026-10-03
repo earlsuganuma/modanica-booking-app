@@ -5,7 +5,7 @@ const { resolveDatetime } = require("../../../../lib/timeTemplates");
 const { hasConflict } = require("../../../../lib/availability");
 const { calcPrice, selectOptions } = require("../../../../lib/pricing");
 const { getConfirmationMode, INQUIRY_ONLY_MESSAGE } = require("../../../../lib/salesRules");
-const { validateFlexibleTime } = require("../../../../lib/businessHours");
+const { validateFlexibleStart } = require("../../../../lib/businessHours");
 const { todayStr, daysBetween } = require("../../../../lib/dateUtil");
 const { checkRateLimit } = require("../../../../lib/rateLimit");
 const payjpClient = require("../../../../lib/payjpClient");
@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 // 発行済みのchargeIdを検証したうえで行う）。
 export async function POST(request) {
   const body = await request.json();
-  const { planId, date, slotId, startTime, endTime, nights, optionIds = [], optionQuantities = {}, customerEmail, payjpToken } = body;
+  const { planId, date, slotId, startTime, nights, optionIds = [], optionQuantities = {}, customerEmail, payjpToken } = body;
 
   const rateLimitError = checkRateLimit(request, customerEmail);
   if (rateLimitError) return rateLimitError;
@@ -63,11 +63,11 @@ export async function POST(request) {
     return NextResponse.json({ error: "guest_count_too_high" }, { status: 400 });
   }
   if (plan.time_type === "flexible") {
-    const timeError = validateFlexibleTime(startTime, endTime);
+    const timeError = validateFlexibleStart(startTime);
     if (timeError) return NextResponse.json({ error: "invalid_time", message: timeError }, { status: 400 });
   }
 
-  const { start, end, nightDates } = resolveDatetime({ timeType: plan.time_type, date, slotId, startTime, endTime, nights });
+  const { start, end, nightDates } = resolveDatetime({ timeType: plan.time_type, date, slotId, startTime, nights, planId: plan.id });
   const resourceIds = plan.resources.map((r) => r.id);
 
   const { conflict, adjustable } = await hasConflict({

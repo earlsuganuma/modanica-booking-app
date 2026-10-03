@@ -5,7 +5,7 @@ const { resolveDatetime } = require("../../../lib/timeTemplates");
 const { hasConflict } = require("../../../lib/availability");
 const { calcPrice, selectOptions } = require("../../../lib/pricing");
 const { getConfirmationMode, INQUIRY_ONLY_MESSAGE } = require("../../../lib/salesRules");
-const { validateFlexibleTime } = require("../../../lib/businessHours");
+const { validateFlexibleStart } = require("../../../lib/businessHours");
 const { todayStr, daysBetween } = require("../../../lib/dateUtil");
 const { resolveGuestBreakdown } = require("../../../lib/lodging");
 
@@ -17,7 +17,7 @@ const ADJUSTABLE_CONFLICT_MESSAGE =
 
 export async function POST(request) {
   const body = await request.json();
-  const { planId, date, slotId, startTime, endTime, nights, optionIds, optionQuantities } = body;
+  const { planId, date, slotId, startTime, nights, optionIds, optionQuantities } = body;
 
   const plan = await getPlan(planId);
   if (!plan) return NextResponse.json({ error: "plan_not_found" }, { status: 404 });
@@ -51,7 +51,7 @@ export async function POST(request) {
   }
 
   if (plan.time_type === "flexible") {
-    const timeError = validateFlexibleTime(startTime, endTime);
+    const timeError = validateFlexibleStart(startTime);
     if (timeError) return NextResponse.json({ available: false, reason: timeError });
   }
 
@@ -60,8 +60,8 @@ export async function POST(request) {
     date,
     slotId,
     startTime,
-    endTime,
     nights,
+    planId: plan.id,
   });
 
   const resourceIds = plan.resources.map((r) => r.id);
