@@ -27,7 +27,7 @@ export default function ReserveForm({ plan }) {
   const isStayPlan = STAY_TIME_TYPES.includes(plan.time_type);
   const showMaleGuests = includesMaleGuests(plan);
   const [date, setDate] = useState("");
-  const [slotId, setSlotId] = useState(SLOT3_OPTIONS[2].id);
+  const [slotId, setSlotId] = useState(SLOT3_OPTIONS[0].id);
   const [nights, setNights] = useState(1);
   const [startTime, setStartTime] = useState("11:00");
   const [guestCount, setGuestCount] = useState(plan.min_guests || 1);
