@@ -1,11 +1,14 @@
 const { listPlans } = require("../../../lib/plans");
 import PlanCard from "../../../components/PlanCard";
 import HeroBanner from "../../../components/HeroBanner";
+import FaqSection from "../../../components/FaqSection";
+const { listFaqs } = require("../../../lib/faqs");
 
 export const dynamic = "force-dynamic";
 
 export default async function FacilityPlansPage() {
   const plans = await listPlans("facility");
+  const faqs = await listFaqs("facility");
   return (
     <div className="space-y-6">
       <HeroBanner />
@@ -18,6 +21,7 @@ export default async function FacilityPlansPage() {
           <PlanCard key={p.id} plan={p} />
         ))}
       </div>
+      <FaqSection faqs={faqs} />
     </div>
   );
 }

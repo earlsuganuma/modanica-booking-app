@@ -8,6 +8,7 @@ const links = [
   { href: "/admin/plans", label: "プラン詳細編集" },
   { href: "/admin/calendar", label: "料金設定" },
   { href: "/admin/options", label: "オプション管理" },
+  { href: "/admin/faqs", label: "Q&A管理" },
   { href: "/admin/mail-log", label: "メール送信ログ" },
 ];
 

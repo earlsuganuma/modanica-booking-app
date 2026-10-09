@@ -1,6 +1,8 @@
 const { getPlan } = require("../../../lib/plans");
 import { notFound } from "next/navigation";
 import PlanImageSlideshow from "../../../components/PlanImageSlideshow";
+import FaqSection from "../../../components/FaqSection";
+const { listFaqs } = require("../../../lib/faqs");
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +14,8 @@ export default async function PlanDetailPage({ params }) {
   const plan = await getPlan(id);
   if (!plan) return notFound();
 
-  const manualDefault = plan.confirmationRules.find((r) => r.day_type === "all")?.confirmation_type || "manual";
+  const faqs = await listFaqs(plan.category);
+  const manualDefault =plan.confirmationRules.find((r) => r.day_type === "all")?.confirmation_type || "manual";
 
   return (
     <div className="space-y-6">
@@ -80,6 +83,8 @@ export default async function PlanDetailPage({ params }) {
           </a>
         </div>
       </div>
+
+      <FaqSection faqs={faqs} />
     </div>
   );
 }
