@@ -1,3 +1,5 @@
+import { toSafeHtml } from "../lib/safeHtml";
+
 // よくある質問（折りたたみ表示）。Q&Aが0件のときは何も表示しない。
 export default function FaqSection({ faqs, title = "よくあるご質問" }) {
   if (!faqs || faqs.length === 0) return null;
@@ -14,10 +16,11 @@ export default function FaqSection({ faqs, title = "よくあるご質問" }) {
               </span>
               <span className="text-black/30 group-open:rotate-45 transition-transform flex-shrink-0">＋</span>
             </summary>
-            <p className="mt-2 text-sm text-black/70 leading-relaxed whitespace-pre-wrap">
+            <div className="mt-2 text-sm text-black/70 leading-relaxed whitespace-pre-wrap">
               <span className="text-black/40 mr-2">A.</span>
-              {f.answer}
-            </p>
+              {/* 回答は管理者入力。許可タグ（a/br/strong/b/em/i）とURL自動リンクのみ有効にして出力する */}
+              <span dangerouslySetInnerHTML={{ __html: toSafeHtml(f.answer) }} />
+            </div>
           </details>
         ))}
       </div>

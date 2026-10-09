@@ -134,7 +134,10 @@ export default function AdminFaqsPage() {
                 />
               </label>
               <label className="block text-sm">
-                <span className="text-black/50">回答（改行は表示に反映されます）</span>
+                <span className="text-black/50">
+                  回答（改行は反映されます。URLは自動でリンクになります。使えるタグ：
+                  {'<a href="https://...">文字</a>'}、{"<br>"}、{"<strong>"}、{"<b>"}、{"<em>"}、{"<i>"}）
+                </span>
                 <textarea
                   value={it.answer}
                   onChange={(e) => update(i, "answer", e.target.value)}
