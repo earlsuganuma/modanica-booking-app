@@ -1,6 +1,9 @@
+import HeroBanner from "../components/HeroBanner";
+
 export default function TopPage() {
   return (
     <div className="space-y-8">
+      <HeroBanner />
       <section className="rounded-2xl bg-white p-8 shadow-sm">
         <h1 className="text-2xl font-bold mb-2">MODANICAへようこそ</h1>
         <p className="text-black/60 leading-relaxed">

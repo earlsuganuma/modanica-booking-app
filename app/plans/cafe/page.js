@@ -1,5 +1,6 @@
 const { listPlans } = require("../../../lib/plans");
 import PlanCard from "../../../components/PlanCard";
+import HeroBanner from "../../../components/HeroBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,7 @@ export default async function CafePlansPage() {
   const plans = await listPlans("cafe");
   return (
     <div className="space-y-6">
+      <HeroBanner />
       <div>
         <h1 className="text-xl font-bold">カフェ系プラン</h1>
         <p className="text-sm text-black/50 mt-1">飲食・カフェ利用に関するプランです。決済は当日、店舗にて承ります。</p>
