@@ -77,6 +77,35 @@ export default function AdminFaqsPage() {
         </p>
       </div>
 
+      <div className="rounded-2xl bg-white p-4 shadow-sm text-xs text-black/60 space-y-2">
+        <div className="font-bold text-black/70">回答欄で使えるタグ</div>
+        <ul className="space-y-1">
+          <li>
+            <code className="bg-black/5 rounded px-1">{'<a href="https://example.com">リンク文字</a>'}</code>
+            　リンク（別タブで開きます）
+          </li>
+          <li>
+            <code className="bg-black/5 rounded px-1">https://example.com</code>
+            　URLだけを書いても自動でリンクになります
+          </li>
+          <li>
+            <code className="bg-black/5 rounded px-1">{"<br>"}</code>　改行（Enterキーの改行もそのまま反映されます）
+          </li>
+          <li>
+            <code className="bg-black/5 rounded px-1">{"<strong>太字</strong>"}</code>　または{" "}
+            <code className="bg-black/5 rounded px-1">{"<b>太字</b>"}</code>　太字
+          </li>
+          <li>
+            <code className="bg-black/5 rounded px-1">{"<em>強調</em>"}</code>　または{" "}
+            <code className="bg-black/5 rounded px-1">{"<i>斜体</i>"}</code>　斜体
+          </li>
+        </ul>
+        <p className="text-black/40">
+          上記以外のタグ（画像・スクリプトなど）は使えず、文字としてそのまま表示されます。リンク先は http:// または https://、
+          mailto:、tel: のみ指定できます。
+        </p>
+      </div>
+
       <div className="flex gap-2 text-xs">
         {CATEGORIES.map((c) => (
           <button
@@ -134,10 +163,7 @@ export default function AdminFaqsPage() {
                 />
               </label>
               <label className="block text-sm">
-                <span className="text-black/50">
-                  回答（改行は反映されます。URLは自動でリンクになります。使えるタグ：
-                  {'<a href="https://...">文字</a>'}、{"<br>"}、{"<strong>"}、{"<b>"}、{"<em>"}、{"<i>"}）
-                </span>
+                <span className="text-black/50">回答（使えるタグは上の一覧をご覧ください）</span>
                 <textarea
                   value={it.answer}
                   onChange={(e) => update(i, "answer", e.target.value)}
