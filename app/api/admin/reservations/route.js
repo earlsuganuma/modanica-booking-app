@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 const { load } = require("../../../../lib/store");
 const { computeAtRisk } = require("../../../../lib/priorityRisk");
+const { buildRepeatCounter } = require("../../../../lib/repeater");
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 // 顧客氏名・連絡先などの個人情報を含むため、必ず認証済みのリクエストのみが通ること。
 export async function GET() {
   const data = await load();
+  const repeatCount = buildRepeatCounter(data.reservations);
   const reservations = [...data.reservations]
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .map((r) => {
@@ -43,6 +45,7 @@ export async function GET() {
         customer_email: r.customerEmail,
         customer_tel: r.customerTel,
         customer_address: r.customerAddress,
+        repeat_count: repeatCount(r),
         note: r.note,
         status: r.status,
         total_price: r.totalPrice,

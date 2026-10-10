@@ -113,7 +113,18 @@ export default function AdminReservationDetail({ id }) {
             </div>
             <div className="space-y-1">
               <div className="text-black/40 text-xs">お客様名</div>
-              <div>{reservation.customer_name}</div>
+              <div>
+                {reservation.customer_name}
+                {reservation.repeat_count > 0 && (
+                  <span
+                    className="badge ml-2"
+                    style={{ background: "#fce7f3", color: "#9d174d" }}
+                    title="同じ電話番号の過去の予約があります"
+                  >
+                    リピーター（過去{reservation.repeat_count}回の予約あり）
+                  </span>
+                )}
+              </div>
             </div>
             <div className="space-y-1">
               <div className="text-black/40 text-xs">連絡先</div>

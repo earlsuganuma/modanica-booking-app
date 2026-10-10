@@ -3,6 +3,7 @@ const { load, save } = require("../../../../../lib/store");
 const { sendMail } = require("../../../../../lib/mailer");
 const { reservationConfirmed, reservationCancelled } = require("../../../../../lib/emailTemplates");
 const { computeAtRisk } = require("../../../../../lib/priorityRisk");
+const { buildRepeatCounter } = require("../../../../../lib/repeater");
 const payjpClient = require("../../../../../lib/payjpClient");
 const { refundAmount: calcRefundAmount } = require("../../../../../lib/cancellationPolicy");
 
@@ -56,6 +57,7 @@ export async function GET(request, { params }) {
       customer_email: r.customerEmail,
       customer_tel: r.customerTel,
       customer_address: r.customerAddress,
+      repeat_count: buildRepeatCounter(data.reservations)(r),
       note: r.note,
       status: r.status,
       total_price: r.totalPrice,

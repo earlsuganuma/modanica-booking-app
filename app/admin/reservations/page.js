@@ -108,6 +108,15 @@ export default function AdminReservationsPage() {
                   お客様：{r.customer_name}（{r.guest_count}名
                   {r.guest_male != null ? `：男${r.guest_male}・女${r.guest_female}・子${r.guest_children}` : ""}
                   ）
+                  {r.repeat_count > 0 && (
+                    <span
+                      className="badge ml-1"
+                      style={{ background: "#fce7f3", color: "#9d174d" }}
+                      title="同じ電話番号の過去の予約があります"
+                    >
+                      リピーター（過去{r.repeat_count}回）
+                    </span>
+                  )}
                 </div>
                 <div>連絡先：{r.customer_email} {r.customer_tel}</div>
                 <div>金額：¥{r.total_price.toLocaleString()}</div>
