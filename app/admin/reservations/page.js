@@ -49,6 +49,12 @@ export default function AdminReservationsPage() {
         <h1 className="text-xl font-bold">予約一覧</h1>
         <div className="flex items-center gap-3">
           <a
+            href="/admin/reservations/new"
+            className="text-xs rounded-full bg-ink text-white px-3 py-1.5 hover:opacity-90"
+          >
+            ＋ 予約を登録（電話・店頭）
+          </a>
+          <a
             href="/api/admin/reservations/lodger-csv"
             className="text-xs rounded-full border border-black/20 px-3 py-1.5 hover:bg-black/5"
           >

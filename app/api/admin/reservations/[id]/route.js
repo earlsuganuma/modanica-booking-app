@@ -150,7 +150,8 @@ export async function PATCH(request, { params }) {
   }
 
   // ステータスが実際に変わったときだけメール送信する（同じ操作の連打で二重送信しないように）
-  if (status !== previousStatus) {
+  // メールアドレスのない予約（電話予約など）にはメールを送らない。
+  if (status !== previousStatus && r.customerEmail) {
     const plan = data.plans.find((p) => p.id === r.planId);
     if (status === "confirmed") {
       const mail = reservationConfirmed(r, plan);

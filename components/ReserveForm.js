@@ -22,10 +22,14 @@ function slot3OptionsWithPrice(plan) {
 
 const STAY_TIME_TYPES = ["stay_11_11", "stay_18_11", "stay_16_11"];
 
-export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = "" }) {
+export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = "", adminMode = false }) {
   const slotOptions = slot3OptionsWithPrice(plan);
   const isStayPlan = STAY_TIME_TYPES.includes(plan.time_type);
-  const usesV1Card = !payjpV2 && !!PAYJP_PUBLIC_KEY;
+  const usesV1Card = !adminMode && !payjpV2 && !!PAYJP_PUBLIC_KEY;
+  // 管理者モード（電話予約など）：決済なし・メール任意・確認事項の同意なし
+  const [adminPayMethod, setAdminPayMethod] = useState("onsite");
+  const [adminStatus, setAdminStatus] = useState("confirmed");
+  const [adminPriceOverride, setAdminPriceOverride] = useState("");
   const showMaleGuests = includesMaleGuests(plan);
   const [date, setDate] = useState("");
   const [slotId, setSlotId] = useState(SLOT3_OPTIONS[0].id);
@@ -50,7 +54,7 @@ export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = 
   const [customerTel, setCustomerTel] = useState("");
   const [note, setNote] = useState("");
   const [agreedToPriorityClause, setAgreedToPriorityClause] = useState(false);
-  const requiresPriorityClause = plan.category === "cafe";
+  const requiresPriorityClause = plan.category === "cafe" && !adminMode;
 
   const [checking, setChecking] = useState(false);
   const [availability, setAvailability] = useState(null);
@@ -76,7 +80,7 @@ export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = 
   const widgetsRef = useRef(null);
 
   useEffect(() => {
-    if (!payjpV2 || phase !== "pay" || !v2Session) return;
+    if (adminMode || !payjpV2 || phase !== "pay" || !v2Session) return;
     let cancelled = false;
     setWidgetsReady(false);
 
@@ -111,7 +115,7 @@ export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = 
   }, [payjpV2, phase, v2Session, payjpV2PublicKey]);
 
   useEffect(() => {
-    if (payjpV2 || !PAYJP_PUBLIC_KEY) return;
+    if (!usesV1Card) return;
     let cancelled = false;
 
     function setup() {
@@ -202,6 +206,37 @@ export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = 
     }
     setSubmitting(true);
     setError(null);
+
+    if (adminMode) {
+      try {
+        const res = await fetch("/api/admin/reservations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...payloadBase,
+            customerName,
+            customerEmail,
+            customerTel,
+            customerAddress: isStayPlan ? customerAddress : undefined,
+            note,
+            paymentMethod: adminPayMethod,
+            status: adminStatus,
+            totalPriceOverride: adminPriceOverride,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.message || "予約の登録に失敗しました。内容をご確認ください。");
+          setSubmitting(false);
+          return;
+        }
+        window.location.href = `/admin/reservations/${data.reservationId}`;
+      } catch (err) {
+        setError("予約の登録に失敗しました。");
+        setSubmitting(false);
+      }
+      return;
+    }
 
     if (payjpV2) {
       // PAY.JP API v2：サーバーで料金を確定計算してPayment Flowを作成し、決済フォームを表示する。
@@ -693,10 +728,10 @@ export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = 
           />
         </label>
         <label className="block text-sm">
-          <span className="text-black/50">メールアドレス</span>
+          <span className="text-black/50">メールアドレス{adminMode ? "（任意）" : ""}</span>
           <input
             type="email"
-            required
+            required={!adminMode}
             value={customerEmail}
             onChange={(e) => setCustomerEmail(e.target.value)}
             className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
@@ -732,6 +767,51 @@ export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = 
         </label>
       </div>
 
+      {adminMode && (
+        <div className="rounded-2xl bg-white p-6 shadow-sm space-y-4">
+          <h2 className="font-bold">受付情報（管理者のみ）</h2>
+          <p className="text-xs text-black/40">
+            決済・確認メールなしで登録します。支払い方法は備考欄の先頭に記録されます。
+          </p>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <label className="block text-sm">
+              <span className="text-black/50">お支払い方法</span>
+              <select
+                value={adminPayMethod}
+                onChange={(e) => setAdminPayMethod(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+              >
+                <option value="onsite">現地払い（当日）</option>
+                <option value="invoice">請求書払い</option>
+                <option value="bank_transfer">事前銀行振込</option>
+                <option value="other">その他</option>
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="text-black/50">予約の状態</span>
+              <select
+                value={adminStatus}
+                onChange={(e) => setAdminStatus(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+              >
+                <option value="confirmed">確定</option>
+                <option value="pending_review">要確認</option>
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="text-black/50">金額の上書き（空欄なら自動計算）</span>
+              <input
+                type="number"
+                min="0"
+                value={adminPriceOverride}
+                onChange={(e) => setAdminPriceOverride(e.target.value)}
+                placeholder="例: 30000"
+                className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+              />
+            </label>
+          </div>
+        </div>
+      )}
       </fieldset>
 
       {payjpV2 && phase === "pay" && v2Session && (
@@ -777,6 +857,8 @@ export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = 
       >
         {submitting
           ? "送信中…"
+          : adminMode
+          ? "この内容で予約を登録する"
           : payjpV2 && phase === "pay"
           ? payMethod === "paypay"
             ? "PayPayで支払って予約する"
@@ -785,16 +867,20 @@ export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = 
           ? "お支払いへ進む"
           : "この内容で予約する（要確認）"}
       </button>
-      <p className="text-xs text-black/40 text-center">
-        送信後は「要確認」ステータスとなり、担当者が確認のうえ確定のご連絡をいたします。
-      </p>
-      <p className="text-xs text-black/40 text-center">
-        ご予約は
-        <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="underline">
-          利用規約（キャンセルポリシーを含む）
-        </a>
-        に同意のうえお申し込みいただいたものとみなします。
-      </p>
+      {!adminMode && (
+        <>
+          <p className="text-xs text-black/40 text-center">
+            送信後は「要確認」ステータスとなり、担当者が確認のうえ確定のご連絡をいたします。
+          </p>
+          <p className="text-xs text-black/40 text-center">
+            ご予約は
+            <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="underline">
+              利用規約（キャンセルポリシーを含む）
+            </a>
+            に同意のうえお申し込みいただいたものとみなします。
+          </p>
+        </>
+      )}
     </form>
   );
 }
