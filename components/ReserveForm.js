@@ -176,7 +176,7 @@ export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = 
     setAvailability(null);
     setError(null);
     try {
-      const res = await fetch("/api/availability", {
+      const res = await fetch(adminMode ? "/api/admin/availability" : "/api/availability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payloadBase),
