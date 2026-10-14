@@ -9,6 +9,7 @@ const links = [
   { href: "/admin/calendar", label: "料金設定" },
   { href: "/admin/options", label: "オプション管理" },
   { href: "/admin/faqs", label: "Q&A管理" },
+  { href: "/admin/mail-notes", label: "確定メール文面" },
   { href: "/admin/mail-log", label: "メール送信ログ" },
 ];
 

@@ -5,6 +5,7 @@ const { reservationConfirmed, reservationCancelled } = require("../../../../../l
 const { computeAtRisk } = require("../../../../../lib/priorityRisk");
 const { buildRepeatCounter } = require("../../../../../lib/repeater");
 const payjpGateway = require("../../../../../lib/paymentGateway");
+const { getConfirmedNote } = require("../../../../../lib/planMailNotes");
 const { refundAmount: calcRefundAmount } = require("../../../../../lib/cancellationPolicy");
 
 export const dynamic = "force-dynamic";
@@ -154,7 +155,8 @@ export async function PATCH(request, { params }) {
   if (status !== previousStatus && r.customerEmail) {
     const plan = data.plans.find((p) => p.id === r.planId);
     if (status === "confirmed") {
-      const mail = reservationConfirmed(r, plan);
+      const extraNote = await getConfirmedNote(r.planId);
+      const mail = reservationConfirmed(r, plan, extraNote);
       await sendMail({ type: "reservation_confirmed", to: r.customerEmail, ...mail });
     } else if (status === "cancelled") {
       const mail = reservationCancelled(r, plan, { refundedAmount: r.refundedAmount || 0 });
