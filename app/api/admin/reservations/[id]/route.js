@@ -156,10 +156,10 @@ export async function PATCH(request, { params }) {
     const plan = data.plans.find((p) => p.id === r.planId);
     if (status === "confirmed") {
       const extraNote = await getConfirmedNote(r.planId);
-      const mail = reservationConfirmed(r, plan, extraNote);
+      const mail = reservationConfirmed(r, plan, extraNote, data.options);
       await sendMail({ type: "reservation_confirmed", to: r.customerEmail, ...mail });
     } else if (status === "cancelled") {
-      const mail = reservationCancelled(r, plan, { refundedAmount: r.refundedAmount || 0 });
+      const mail = reservationCancelled(r, plan, { refundedAmount: r.refundedAmount || 0 }, data.options);
       await sendMail({ type: "reservation_cancelled", to: r.customerEmail, ...mail });
     }
   }

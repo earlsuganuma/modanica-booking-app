@@ -223,10 +223,10 @@ export async function POST(request) {
   await save(data);
 
   // 予約受付メール（お客様宛）＋ 新規予約通知（運営者宛・ADMIN_NOTIFY_EMAIL設定時のみ）
-  const receivedMail = reservationReceived(reservation, plan);
+  const receivedMail = reservationReceived(reservation, plan, data.options);
   await sendMail({ type: "reservation_received", to: customerEmail, ...receivedMail });
   if (ADMIN_NOTIFY_EMAIL) {
-    const adminMail = adminNewReservationNotice(reservation, plan);
+    const adminMail = adminNewReservationNotice(reservation, plan, data.options);
     await sendMail({ type: "admin_notify", to: ADMIN_NOTIFY_EMAIL, ...adminMail });
   }
 
