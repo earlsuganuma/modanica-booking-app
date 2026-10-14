@@ -87,6 +87,14 @@ export async function PATCH(request, { params }) {
 
   const previousStatus = r.status;
 
+  // 決済のある予約は、キャンセル後に「確定」「要確認」へ戻せない（返金済みなのに枠だけ埋まる事故の防止）。
+  if (previousStatus === "cancelled" && status !== "cancelled" && r.paymentStatus && r.paymentStatus !== "none") {
+    return NextResponse.json(
+      { error: "cannot_reopen", message: "決済のある予約は、キャンセル後に元へ戻せません。新しく予約を作成してください。" },
+      { status: 409 }
+    );
+  }
+
   // ステータスが実際に変わる場合のみ、決済（PAY.JP）の処理を行う。
   if (status !== previousStatus) {
     if (status === "confirmed" && r.paymentStatus === "authorized") {

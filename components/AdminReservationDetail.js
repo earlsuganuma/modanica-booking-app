@@ -182,7 +182,12 @@ export default function AdminReservationDetail({ id }) {
           )}
 
           <div className="border-t border-black/10 pt-4 flex flex-wrap gap-2">
-            {reservation.status !== "confirmed" && (
+            {reservation.status === "cancelled" && reservation.payment_status !== "none" && (
+              <p className="text-xs text-black/40 w-full">
+                決済のある予約はキャンセル後に元へ戻せません。再度ご利用の場合は、新しく予約を作成してください。
+              </p>
+            )}
+            {reservation.status !== "confirmed" && !(reservation.status === "cancelled" && reservation.payment_status !== "none") && (
               <button
                 onClick={() => updateStatus("confirmed")}
                 disabled={updating}
@@ -191,7 +196,7 @@ export default function AdminReservationDetail({ id }) {
                 確定する{reservation.payment_status === "authorized" ? "（決済確定）" : ""}
               </button>
             )}
-            {reservation.status !== "pending_review" && (
+            {reservation.status !== "pending_review" && !(reservation.status === "cancelled" && reservation.payment_status !== "none") && (
               <button
                 onClick={() => updateStatus("pending_review")}
                 disabled={updating}
