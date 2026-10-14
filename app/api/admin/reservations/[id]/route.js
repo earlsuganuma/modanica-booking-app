@@ -132,8 +132,14 @@ export async function PATCH(request, { params }) {
             r.refundedAmount = (r.refundedAmount || 0) + amountToRefund;
             r.paymentStatus = r.refundedAmount >= (r.paymentAmount || 0) ? "refunded" : "partially_refunded";
           } catch (e) {
-            const message = payjpGateway.errorMessage(e, "返金処理に失敗しました。PAY.JPの管理画面をご確認ください。");
-            return NextResponse.json({ error: "refund_failed", message }, { status: 402 });
+            if (e && e.payjpError && e.payjpError.code === "already_refunded") {
+              // PAY.JPの管理画面で先に全額返金されていた場合：こちらの記録を合わせてキャンセルを進める。
+              r.refundedAmount = r.paymentAmount || r.refundedAmount || 0;
+              r.paymentStatus = "refunded";
+            } else {
+              const message = payjpGateway.errorMessage(e, "返金処理に失敗しました。PAY.JPの管理画面をご確認ください。");
+              return NextResponse.json({ error: "refund_failed", message }, { status: 402 });
+            }
           }
         }
         // amountToRefund が 0（当日キャンセル等でキャンセル料が全額のケース）の場合は返金なし・paymentStatusは captured のまま。
