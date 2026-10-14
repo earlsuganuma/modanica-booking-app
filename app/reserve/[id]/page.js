@@ -18,7 +18,11 @@ export default async function ReservePage({ params }) {
       {plan.description && (
         <p className="text-sm text-black/70 leading-relaxed whitespace-pre-wrap">{plan.description}</p>
       )}
-      <ReserveForm plan={plan} />
+      <ReserveForm
+        plan={plan}
+        payjpV2={process.env.PAYJP_API_VERSION === "v2"}
+        payjpV2PublicKey={process.env.PAYJP_PUBLIC_KEY || process.env.NEXT_PUBLIC_PAYJP_PUBLIC_KEY || ""}
+      />
     </div>
   );
 }

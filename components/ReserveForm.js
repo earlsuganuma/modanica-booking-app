@@ -22,9 +22,10 @@ function slot3OptionsWithPrice(plan) {
 
 const STAY_TIME_TYPES = ["stay_11_11", "stay_18_11", "stay_16_11"];
 
-export default function ReserveForm({ plan }) {
+export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = "" }) {
   const slotOptions = slot3OptionsWithPrice(plan);
   const isStayPlan = STAY_TIME_TYPES.includes(plan.time_type);
+  const usesV1Card = !payjpV2 && !!PAYJP_PUBLIC_KEY;
   const showMaleGuests = includesMaleGuests(plan);
   const [date, setDate] = useState("");
   const [slotId, setSlotId] = useState(SLOT3_OPTIONS[0].id);
@@ -67,8 +68,50 @@ export default function ReserveForm({ plan }) {
   const [cardBrand, setCardBrand] = useState(null);
   const [cardFormError, setCardFormError] = useState(null);
 
+  // PAY.JP API v2（カード＋PayPay）：入力 →「お支払いへ進む」→ 決済フォーム表示 →「支払って予約する」
+  const [payMethod, setPayMethod] = useState("card"); // "card" | "paypay"
+  const [phase, setPhase] = useState("form"); // "form" | "pay"
+  const [v2Session, setV2Session] = useState(null); // { clientSecret, draftToken, paymentFlowId, total }
+  const [widgetsReady, setWidgetsReady] = useState(false);
+  const widgetsRef = useRef(null);
+
   useEffect(() => {
-    if (!PAYJP_PUBLIC_KEY) return;
+    if (!payjpV2 || phase !== "pay" || !v2Session) return;
+    let cancelled = false;
+    setWidgetsReady(false);
+
+    function mountWidgets() {
+      if (cancelled || !window.PayjpPayments) return;
+      const payments = window.PayjpPayments(payjpV2PublicKey);
+      const widgets = payments.widgets({ clientSecret: v2Session.clientSecret });
+      const form = widgets.createForm("payment");
+      form.mount("#payjp-payment-form");
+      widgetsRef.current = widgets;
+      setWidgetsReady(true);
+    }
+
+    if (window.PayjpPayments) {
+      mountWidgets();
+    } else {
+      const existing = document.querySelector('script[src="https://js.pay.jp/payments.js"]');
+      const script = existing || document.createElement("script");
+      if (!existing) {
+        script.src = "https://js.pay.jp/payments.js";
+        document.head.appendChild(script);
+      }
+      script.addEventListener("load", mountWidgets);
+      return () => {
+        cancelled = true;
+        script.removeEventListener("load", mountWidgets);
+      };
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [payjpV2, phase, v2Session, payjpV2PublicKey]);
+
+  useEffect(() => {
+    if (payjpV2 || !PAYJP_PUBLIC_KEY) return;
     let cancelled = false;
 
     function setup() {
@@ -149,7 +192,7 @@ export default function ReserveForm({ plan }) {
       setError("確認事項へのご同意にチェックしてください。");
       return;
     }
-    if (PAYJP_PUBLIC_KEY && !cardComplete) {
+    if (usesV1Card && !cardComplete) {
       setError("お支払い情報（クレジットカード）を入力してください。");
       return;
     }
@@ -160,8 +203,41 @@ export default function ReserveForm({ plan }) {
     setSubmitting(true);
     setError(null);
 
+    if (payjpV2) {
+      // PAY.JP API v2：サーバーで料金を確定計算してPayment Flowを作成し、決済フォームを表示する。
+      try {
+        const createRes = await fetch("/api/payments/v2/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payloadBase, customerName, customerEmail, customerTel, customerAddress: isStayPlan ? customerAddress : undefined, note, method: payMethod }),
+        });
+        const createData = await createRes.json();
+        if (createRes.ok) {
+          setV2Session({
+            clientSecret: createData.clientSecret,
+            draftToken: createData.draftToken,
+            paymentFlowId: createData.paymentFlowId,
+            total: createData.price && createData.price.total,
+          });
+          setPhase("pay");
+          setSubmitting(false);
+          return;
+        }
+        if (createData.error !== "payment_not_required") {
+          setError(createData.message || "お支払いの準備に失敗しました。日程・内容をご確認ください。");
+          setSubmitting(false);
+          return;
+        }
+        // 金額0円の場合は決済なしでそのまま予約する（下の通常処理へ）。
+      } catch (err) {
+        setError("お支払いの準備に失敗しました。通信状況をご確認のうえ再度お試しください。");
+        setSubmitting(false);
+        return;
+      }
+    }
+
     let payjpChargeId = null;
-    if (PAYJP_PUBLIC_KEY) {
+    if (usesV1Card) {
       try {
         const tokenRes = await payjpRef.current.createToken(cardElementRef.current);
         if (tokenRes.error) {
@@ -242,6 +318,31 @@ export default function ReserveForm({ plan }) {
     }
   }
 
+  async function handlePay() {
+    if (!widgetsRef.current || !v2Session) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const returnUrl = `${window.location.origin}/payment/return?t=${encodeURIComponent(v2Session.draftToken)}`;
+      const result = await widgetsRef.current.confirmPayment({ return_url: returnUrl });
+      // 成功時は自動的に return_url へ移動する。ここに来るのはエラー時のみ。
+      if (result && result.error) {
+        setError(result.error.message || "お支払いに失敗しました。内容をご確認のうえ再度お試しください。");
+      }
+    } catch (err) {
+      setError("お支払い処理に失敗しました。時間をおいて再度お試しください。");
+    }
+    setSubmitting(false);
+  }
+
+  function backToForm() {
+    setPhase("form");
+    setV2Session(null);
+    widgetsRef.current = null;
+    setWidgetsReady(false);
+    setError(null);
+  }
+
   function toggleOption(id) {
     setOptionIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
@@ -253,7 +354,18 @@ export default function ReserveForm({ plan }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form
+      onSubmit={(e) => {
+        if (payjpV2 && phase === "pay") {
+          e.preventDefault();
+          handlePay();
+        } else {
+          handleSubmit(e);
+        }
+      }}
+      className="space-y-6"
+    >
+      <fieldset disabled={phase === "pay"} className="contents">
       <div className="rounded-2xl bg-white p-6 shadow-sm space-y-4">
         <h2 className="font-bold">日程・人数</h2>
 
@@ -526,7 +638,33 @@ export default function ReserveForm({ plan }) {
         </div>
       )}
 
-      {PAYJP_PUBLIC_KEY && (
+      {payjpV2 && (
+        <div className="rounded-2xl bg-white p-6 shadow-sm space-y-3">
+          <h2 className="font-bold">お支払い方法</h2>
+          <div className="space-y-2 text-sm">
+            <label className="flex items-start gap-2">
+              <input type="radio" name="payMethod" checked={payMethod === "card"} onChange={() => setPayMethod("card")} className="mt-1" />
+              <span>
+                クレジットカード
+                <span className="block text-xs text-black/40">
+                  ご予約確定時にお支払いが確定します（送信直後は与信枠の確保のみで、請求は発生しません）。
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input type="radio" name="payMethod" checked={payMethod === "paypay"} onChange={() => setPayMethod("paypay")} className="mt-1" />
+              <span>
+                PayPay
+                <span className="block text-xs text-black/40">
+                  お申込み時に即時お支払いが確定します。キャンセル時はキャンセルポリシーに基づき返金いたします。
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+      )}
+
+      {usesV1Card && (
         <div className="rounded-2xl bg-white p-6 shadow-sm space-y-3">
           <h2 className="font-bold">お支払い情報</h2>
           <p className="text-xs text-black/40">
@@ -594,6 +732,29 @@ export default function ReserveForm({ plan }) {
         </label>
       </div>
 
+      </fieldset>
+
+      {payjpV2 && phase === "pay" && v2Session && (
+        <div className="rounded-2xl bg-white p-6 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold">{payMethod === "paypay" ? "PayPayでお支払い" : "カード情報のご入力"}</h2>
+            <button type="button" onClick={backToForm} className="text-xs underline text-black/40">
+              入力内容を修正する
+            </button>
+          </div>
+          {v2Session.total != null && (
+            <p className="text-sm">
+              お支払い金額：<span className="font-bold">¥{Number(v2Session.total).toLocaleString()}</span>
+            </p>
+          )}
+          <div id="payjp-payment-form" />
+          {!widgetsReady && <p className="text-xs text-black/30">決済フォームを読み込み中…</p>}
+          {payMethod === "paypay" && (
+            <p className="text-xs text-black/40">「支払う」を押すとPayPayの画面へ移動します。お支払い後、自動でこのサイトに戻り予約が完了します。</p>
+          )}
+        </div>
+      )}
+
       {error && <div className="text-sm text-red-700 bg-red-50 rounded-lg px-4 py-3">{error}</div>}
 
       {paymentStep && (
@@ -609,11 +770,20 @@ export default function ReserveForm({ plan }) {
         disabled={
           submitting ||
           (requiresPriorityClause && !agreedToPriorityClause) ||
-          (!!PAYJP_PUBLIC_KEY && !cardComplete)
+          (usesV1Card && !cardComplete) ||
+          (payjpV2 && phase === "pay" && !widgetsReady)
         }
         className="w-full rounded-full bg-ink text-white px-6 py-3 font-semibold hover:opacity-90 disabled:opacity-40"
       >
-        {submitting ? "送信中…" : "この内容で予約する（要確認）"}
+        {submitting
+          ? "送信中…"
+          : payjpV2 && phase === "pay"
+          ? payMethod === "paypay"
+            ? "PayPayで支払って予約する"
+            : "支払って予約する（要確認）"
+          : payjpV2
+          ? "お支払いへ進む"
+          : "この内容で予約する（要確認）"}
       </button>
       <p className="text-xs text-black/40 text-center">
         送信後は「要確認」ステータスとなり、担当者が確認のうえ確定のご連絡をいたします。

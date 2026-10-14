@@ -11,6 +11,8 @@ const { sendMail, ADMIN_NOTIFY_EMAIL } = require("../../../lib/mailer");
 const { reservationReceived, adminNewReservationNotice } = require("../../../lib/emailTemplates");
 const { checkRateLimit } = require("../../../lib/rateLimit");
 const payjpClient = require("../../../lib/payjpClient");
+const payjpV2 = require("../../../lib/payjpV2Client");
+const payjpGateway = require("../../../lib/paymentGateway");
 const { isStayPlan, resolveGuestBreakdown } = require("../../../lib/lodging");
 
 export const dynamic = "force-dynamic";
@@ -37,6 +39,8 @@ export async function POST(request) {
     customerAddress,
     note,
     payjpChargeId: submittedChargeId,
+    payjpPaymentFlowId: submittedFlowId,
+    paymentMethodType,
   } = body;
 
   const rateLimitError = checkRateLimit(request, customerEmail);
@@ -108,7 +112,43 @@ export async function POST(request) {
   let cardBrand = null;
   let cardLast4 = null;
 
-  if (price.total > 0) {
+  if (price.total > 0 && submittedFlowId) {
+    // PAY.JP API v2：決済（Payment Flow）済みであることをPAY.JP側の情報で検証してから予約を作る。
+    if (!payjpV2.isConfigured()) {
+      return NextResponse.json({ error: "payment_not_configured", message: "現在オンライン決済がご利用いただけません。" }, { status: 503 });
+    }
+    // 二重送信・リロード対策：同じ決済で作成済みの予約があれば、それを返す。
+    const existing = data.reservations.find((r) => r.payjpChargeId === submittedFlowId);
+    if (existing) {
+      return NextResponse.json({ reservationId: existing.id, price, status: existing.status, reused: true });
+    }
+    let flow;
+    try {
+      flow = await payjpV2.retrievePaymentFlow(submittedFlowId);
+    } catch (e) {
+      return NextResponse.json({ error: "payment_lookup_failed", message: "お支払い状況の確認に失敗しました。時間をおいて再度お試しください。" }, { status: 502 });
+    }
+    const flowMethod = paymentMethodType === "paypay" ? "paypay" : "card";
+    const okStatus = flowMethod === "paypay" ? ["succeeded"] : ["requires_capture", "succeeded"];
+    if (flow.status === "processing" || flow.status === "requires_action" || flow.status === "requires_confirmation") {
+      return NextResponse.json({ error: "payment_processing", message: "お支払いの処理中です。しばらくお待ちください。" }, { status: 202 });
+    }
+    if (!okStatus.includes(flow.status)) {
+      return NextResponse.json({ error: "payment_not_completed", message: "お支払いが完了していません。お手数ですが最初からやり直してください。" }, { status: 402 });
+    }
+    const metaPlan = flow.metadata && flow.metadata.planId;
+    if (flow.amount !== price.total || (metaPlan && metaPlan !== plan.id)) {
+      // 金額・内容の不一致（改ざんの可能性）：決済を取り消して予約を拒否する。
+      await payjpGateway.releaseOrRefundFlow(flow).catch(() => {});
+      return NextResponse.json({ error: "amount_mismatch", message: "お支払い金額の確認に失敗しました。恐れ入りますが最初からやり直してください。" }, { status: 402 });
+    }
+    const pmInfo = await payjpV2.describePaymentMethod(flow, flowMethod);
+    paymentStatus = flow.status === "succeeded" ? "captured" : "authorized";
+    payjpChargeId = flow.id;
+    paymentAmount = flow.status === "succeeded" ? (flow.amount_received != null ? flow.amount_received : flow.amount) : flow.amount;
+    cardBrand = pmInfo.brand;
+    cardLast4 = pmInfo.last4;
+  } else if (price.total > 0) {
     if (!payjpClient.isConfigured()) {
       return NextResponse.json(
         { error: "payment_not_configured", message: "現在オンライン決済がご利用いただけません。恐れ入りますがお電話にてご予約ください。" },

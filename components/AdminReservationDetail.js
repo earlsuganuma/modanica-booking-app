@@ -147,7 +147,8 @@ export default function AdminReservationDetail({ id }) {
                 {reservation.card_brand && (
                   <span className="text-black/40 text-xs">
                     {" "}
-                    （{reservation.card_brand} 下4桁 {reservation.card_last4}）
+                    （{reservation.card_brand}
+                    {reservation.card_last4 ? ` 下4桁 ${reservation.card_last4}` : ""}）
                   </span>
                 )}
                 {reservation.refunded_amount > 0 && (

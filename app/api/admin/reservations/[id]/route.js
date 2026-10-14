@@ -4,7 +4,7 @@ const { sendMail } = require("../../../../../lib/mailer");
 const { reservationConfirmed, reservationCancelled } = require("../../../../../lib/emailTemplates");
 const { computeAtRisk } = require("../../../../../lib/priorityRisk");
 const { buildRepeatCounter } = require("../../../../../lib/repeater");
-const payjpClient = require("../../../../../lib/payjpClient");
+const payjpGateway = require("../../../../../lib/paymentGateway");
 const { refundAmount: calcRefundAmount } = require("../../../../../lib/cancellationPolicy");
 
 export const dynamic = "force-dynamic";
@@ -92,25 +92,24 @@ export async function PATCH(request, { params }) {
     if (status === "confirmed" && r.paymentStatus === "authorized") {
       // 確定＝支払い確定（オーソリの与信枠を実際に請求する）。
       try {
-        const charge = await payjpClient.capture(r.payjpChargeId);
+        const capturedAmount = await payjpGateway.capture(r.payjpChargeId);
         r.paymentStatus = "captured";
-        r.paymentAmount = charge.amount;
+        r.paymentAmount = capturedAmount;
       } catch (e) {
-        const message =
-          (e && e.response && e.response.body && e.response.body.error && e.response.body.error.message) ||
-          "決済の確定処理に失敗しました。与信の期限切れ、またはカードの利用制限の可能性があります。PAY.JPの管理画面もあわせてご確認ください。";
+        const message = payjpGateway.errorMessage(
+          e,
+          "決済の確定処理に失敗しました。与信の期限切れ、またはカードの利用制限の可能性があります。PAY.JPの管理画面もあわせてご確認ください。"
+        );
         return NextResponse.json({ error: "capture_failed", message }, { status: 402 });
       }
     } else if (status === "cancelled") {
       if (r.paymentStatus === "authorized") {
         // まだ確定（請求）していない：与信枠を解放するだけで、実際の請求は発生しない。
         try {
-          await payjpClient.refund(r.payjpChargeId);
+          await payjpGateway.releaseAuthorization(r.payjpChargeId);
           r.paymentStatus = "released";
         } catch (e) {
-          const message =
-            (e && e.response && e.response.body && e.response.body.error && e.response.body.error.message) ||
-            "与信枠の解放に失敗しました。PAY.JPの管理画面をご確認ください。";
+          const message = payjpGateway.errorMessage(e, "与信枠の解放に失敗しました。PAY.JPの管理画面をご確認ください。");
           return NextResponse.json({ error: "refund_failed", message }, { status: 402 });
         }
       } else if (r.paymentStatus === "captured") {
@@ -121,13 +120,11 @@ export async function PATCH(request, { params }) {
           : Math.min(remaining, calcRefundAmount(r.totalPrice, r.startDatetime));
         if (amountToRefund > 0) {
           try {
-            await payjpClient.refund(r.payjpChargeId, amountToRefund);
+            await payjpGateway.refund(r.payjpChargeId, amountToRefund);
             r.refundedAmount = (r.refundedAmount || 0) + amountToRefund;
             r.paymentStatus = r.refundedAmount >= (r.paymentAmount || 0) ? "refunded" : "partially_refunded";
           } catch (e) {
-            const message =
-              (e && e.response && e.response.body && e.response.body.error && e.response.body.error.message) ||
-              "返金処理に失敗しました。PAY.JPの管理画面をご確認ください。";
+            const message = payjpGateway.errorMessage(e, "返金処理に失敗しました。PAY.JPの管理画面をご確認ください。");
             return NextResponse.json({ error: "refund_failed", message }, { status: 402 });
           }
         }
