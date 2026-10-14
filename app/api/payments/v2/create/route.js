@@ -11,6 +11,7 @@ const { checkRateLimit } = require("../../../../../lib/rateLimit");
 const { resolveGuestBreakdown, isStayPlan } = require("../../../../../lib/lodging");
 const payjpV2 = require("../../../../../lib/payjpV2Client");
 const draftToken = require("../../../../../lib/draftToken");
+const { requiresOnlinePayment } = require("../../../../../lib/paymentRules");
 
 export const dynamic = "force-dynamic";
 
@@ -103,7 +104,7 @@ export async function POST(request) {
   const selectedOptions = selectOptions(plan.options, optionIds, optionQuantities);
   const price = calcPrice({ plan, nightDates, guestCount, selectedOptions, slotId, optionQuantities, priceRules: data.priceRules, childrenCount });
 
-  if (price.total <= 0) {
+  if (price.total <= 0 || !requiresOnlinePayment(plan)) {
     return NextResponse.json({ error: "payment_not_required" }, { status: 400 });
   }
 

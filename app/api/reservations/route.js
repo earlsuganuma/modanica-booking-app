@@ -12,6 +12,7 @@ const { reservationReceived, adminNewReservationNotice } = require("../../../lib
 const { checkRateLimit } = require("../../../lib/rateLimit");
 const payjpClient = require("../../../lib/payjpClient");
 const payjpV2 = require("../../../lib/payjpV2Client");
+const { requiresOnlinePayment } = require("../../../lib/paymentRules");
 const payjpGateway = require("../../../lib/paymentGateway");
 const { isStayPlan, resolveGuestBreakdown } = require("../../../lib/lodging");
 
@@ -112,7 +113,10 @@ export async function POST(request) {
   let cardBrand = null;
   let cardLast4 = null;
 
-  if (price.total > 0 && submittedFlowId) {
+  // 決済不要のプラン（lib/paymentRules.js）は、決済情報が送られてきても無視して予約だけ作る。
+  const needsPayment = price.total > 0 && requiresOnlinePayment(plan);
+
+  if (needsPayment && submittedFlowId) {
     // PAY.JP API v2：決済（Payment Flow）済みであることをPAY.JP側の情報で検証してから予約を作る。
     if (!payjpV2.isConfigured()) {
       return NextResponse.json({ error: "payment_not_configured", message: "現在オンライン決済がご利用いただけません。" }, { status: 503 });
@@ -148,7 +152,7 @@ export async function POST(request) {
     paymentAmount = flow.status === "succeeded" ? (flow.amount_received != null ? flow.amount_received : flow.amount) : flow.amount;
     cardBrand = pmInfo.brand;
     cardLast4 = pmInfo.last4;
-  } else if (price.total > 0) {
+  } else if (needsPayment) {
     if (!payjpClient.isConfigured()) {
       return NextResponse.json(
         { error: "payment_not_configured", message: "現在オンライン決済がご利用いただけません。恐れ入りますがお電話にてご予約ください。" },

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import TimeAxis from "./TimeAxis";
 import { includesMaleGuests } from "../lib/lodging";
+import { requiresOnlinePayment } from "../lib/paymentRules";
 import { computeFlexibleEndTime, flexibleDurationHours } from "../lib/timeTemplates";
 
 const PAYJP_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYJP_PUBLIC_KEY || "";
@@ -22,10 +23,13 @@ function slot3OptionsWithPrice(plan) {
 
 const STAY_TIME_TYPES = ["stay_11_11", "stay_18_11", "stay_16_11"];
 
-export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = "", adminMode = false }) {
+export default function ReserveForm({ plan, payjpV2: payjpV2Prop = false, payjpV2PublicKey = "", adminMode = false }) {
+  // 決済不要のプラン（当日店頭払い。lib/paymentRules.js）・管理者モードでは、決済の画面と処理を使わない。
+  const payOnline = !adminMode && requiresOnlinePayment(plan);
+  const payjpV2 = payjpV2Prop && payOnline;
   const slotOptions = slot3OptionsWithPrice(plan);
   const isStayPlan = STAY_TIME_TYPES.includes(plan.time_type);
-  const usesV1Card = !adminMode && !payjpV2 && !!PAYJP_PUBLIC_KEY;
+  const usesV1Card = payOnline && !payjpV2 && !!PAYJP_PUBLIC_KEY;
   // 管理者モード（電話予約など）：決済なし・メール任意・確認事項の同意なし
   const [adminPayMethod, setAdminPayMethod] = useState("onsite");
   const [adminStatus, setAdminStatus] = useState("confirmed");
@@ -670,6 +674,13 @@ export default function ReserveForm({ plan, payjpV2 = false, payjpV2PublicKey = 
               </span>
             </span>
           </label>
+        </div>
+      )}
+
+      {!adminMode && !payOnline && (
+        <div className="rounded-2xl bg-white p-6 shadow-sm space-y-1">
+          <h2 className="font-bold">お支払いについて</h2>
+          <p className="text-sm text-black/60">このプランのお支払いは、ご利用当日に店頭でお願いいたします（オンライン決済は不要です）。</p>
         </div>
       )}
 
