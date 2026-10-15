@@ -6,6 +6,8 @@ const { computeAtRisk } = require("../../../../../lib/priorityRisk");
 const { buildRepeatCounter } = require("../../../../../lib/repeater");
 const payjpGateway = require("../../../../../lib/paymentGateway");
 const { getConfirmedNote } = require("../../../../../lib/planMailNotes");
+const { isStayPlan, includesMaleGuests } = require("../../../../../lib/lodging");
+const { getPlan } = require("../../../../../lib/plans");
 const { refundAmount: calcRefundAmount } = require("../../../../../lib/cancellationPolicy");
 
 export const dynamic = "force-dynamic";
@@ -46,6 +48,8 @@ export async function GET(request, { params }) {
       plan_id: r.planId,
       plan_name: plan ? plan.name : r.planId,
       plan_category: plan ? plan.category : null,
+      is_stay_plan: plan ? isStayPlan({ time_type: plan.timeType }) : false,
+      shows_male_guests: plan ? includesMaleGuests(plan) : true,
       resource_ids: r.resourceIds,
       options,
       start_datetime: r.startDatetime,
@@ -77,6 +81,56 @@ export async function GET(request, { params }) {
 export async function PATCH(request, { params }) {
   const { id: idParam } = await params;
   const body = await request.json();
+
+  // 予約内容の編集（お客様情報・備考・宿泊者の内訳）。日程・人数・オプション・金額は変更しない。
+  if (body.edit) {
+    const data = await load();
+    const r = data.reservations.find((x) => x.id === Number(idParam));
+    if (!r) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    const e = body.edit;
+    const clean = (v) => String(v == null ? "" : v).trim();
+
+    const name = clean(e.customerName);
+    if (!name) return NextResponse.json({ error: "name_required", message: "お客様のお名前を入力してください。" }, { status: 400 });
+    const email = clean(e.customerEmail);
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: "invalid_email", message: "メールアドレスの形式が正しくありません。" }, { status: 400 });
+    }
+    const plan = await getPlan(r.planId); // 宿泊プラン判定（time_type）にはリレーション付きのプランを使う
+    const address = clean(e.customerAddress);
+    if (plan && isStayPlan(plan) && !address) {
+      return NextResponse.json({ error: "address_required", message: "宿泊プランのため、ご住所は必須です（宿泊者名簿）。" }, { status: 400 });
+    }
+    const note = clean(e.note);
+    if (note.length > 2000) {
+      return NextResponse.json({ error: "too_long", message: "備考は2000文字までです。" }, { status: 400 });
+    }
+
+    // 宿泊者の内訳（宿泊プランのみ）：合計は予約の人数と一致している必要がある。
+    if (plan && isStayPlan(plan) && e.guestFemale !== undefined) {
+      const male = includesMaleGuests(plan) ? Math.max(0, Math.floor(Number(e.guestMale) || 0)) : 0;
+      const female = Math.max(0, Math.floor(Number(e.guestFemale) || 0));
+      const children = Math.max(0, Math.floor(Number(e.guestChildren) || 0));
+      if (male + female + children !== r.guestCount) {
+        return NextResponse.json(
+          { error: "breakdown_mismatch", message: `内訳の合計が人数（${r.guestCount}名）と一致しません。人数そのものは変更できません。` },
+          { status: 400 }
+        );
+      }
+      r.guestMale = male;
+      r.guestFemale = female;
+      r.guestChildren = children;
+    }
+
+    r.customerName = name;
+    r.customerEmail = email || null;
+    r.customerTel = clean(e.customerTel) || null;
+    r.customerAddress = address || null;
+    r.note = note || null;
+    await save(data);
+    return NextResponse.json({ ok: true });
+  }
+
   const { status, fullRefund } = body;
   if (!["confirmed", "cancelled", "pending_review"].includes(status)) {
     return NextResponse.json({ error: "invalid_status" }, { status: 400 });

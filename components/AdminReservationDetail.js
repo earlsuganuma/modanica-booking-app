@@ -47,6 +47,55 @@ export default function AdminReservationDetail({ id }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // 予約内容の編集（お客様情報・備考・宿泊者の内訳）
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  function startEdit() {
+    setActionError(null);
+    setForm({
+      customerName: reservation.customer_name || "",
+      customerEmail: reservation.customer_email || "",
+      customerTel: reservation.customer_tel || "",
+      customerAddress: reservation.customer_address || "",
+      note: reservation.note || "",
+      guestMale: reservation.guest_male ?? 0,
+      guestFemale: reservation.guest_female ?? 0,
+      guestChildren: reservation.guest_children ?? 0,
+    });
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    setSaving(true);
+    setActionError(null);
+    const edit = { ...form };
+    if (!reservation.is_stay_plan || reservation.guest_female == null) {
+      delete edit.guestMale;
+      delete edit.guestFemale;
+      delete edit.guestChildren;
+    }
+    const res = await fetch(`/api/admin/reservations/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ edit }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setActionError(data.message || "保存に失敗しました。");
+      setSaving(false);
+      return;
+    }
+    setEditing(false);
+    await load();
+    setSaving(false);
+  }
+
+  function setField(key, value) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
   async function updateStatus(status, options = {}) {
     setUpdating(true);
     setActionError(null);
@@ -179,6 +228,75 @@ export default function AdminReservationDetail({ id }) {
 
           {actionError && (
             <div className="text-sm text-red-700 bg-red-50 rounded-lg px-4 py-3">{actionError}</div>
+          )}
+
+          {editing && form ? (
+            <div className="rounded-xl border border-black/10 p-4 space-y-3 bg-black/[0.02]">
+              <h2 className="font-bold text-sm">予約内容の編集</h2>
+              <p className="text-xs text-black/40">
+                お客様情報・備考を編集できます。日程・人数・オプション・金額は変更できません（変更が必要な場合は、キャンセルして新しく予約を作成してください）。
+                変更しても、お客様へのメールは送信されません。
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                <label className="block">
+                  <span className="text-black/50 text-xs">お名前</span>
+                  <input value={form.customerName} onChange={(e) => setField("customerName", e.target.value)} className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+                </label>
+                <label className="block">
+                  <span className="text-black/50 text-xs">メールアドレス（任意）</span>
+                  <input value={form.customerEmail} onChange={(e) => setField("customerEmail", e.target.value)} className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+                </label>
+                <label className="block">
+                  <span className="text-black/50 text-xs">電話番号</span>
+                  <input value={form.customerTel} onChange={(e) => setField("customerTel", e.target.value)} className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+                </label>
+                {(reservation.is_stay_plan || reservation.customer_address) && (
+                  <label className="block">
+                    <span className="text-black/50 text-xs">ご住所{reservation.is_stay_plan ? "（宿泊者名簿のため必須）" : ""}</span>
+                    <input value={form.customerAddress} onChange={(e) => setField("customerAddress", e.target.value)} className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+                  </label>
+                )}
+              </div>
+              {reservation.is_stay_plan && reservation.guest_female != null && (
+                <div>
+                  <span className="text-black/50 text-xs">宿泊者の内訳（合計は{reservation.guest_count}名のまま）</span>
+                  <div className="mt-1 grid grid-cols-3 gap-3 text-sm">
+                    {reservation.shows_male_guests && (
+                      <label className="block">
+                        <span className="text-black/40 text-xs">男性</span>
+                        <input type="number" min="0" value={form.guestMale} onChange={(e) => setField("guestMale", e.target.value)} className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+                      </label>
+                    )}
+                    <label className="block">
+                      <span className="text-black/40 text-xs">女性</span>
+                      <input type="number" min="0" value={form.guestFemale} onChange={(e) => setField("guestFemale", e.target.value)} className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+                    </label>
+                    <label className="block">
+                      <span className="text-black/40 text-xs">子供</span>
+                      <input type="number" min="0" value={form.guestChildren} onChange={(e) => setField("guestChildren", e.target.value)} className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+                    </label>
+                  </div>
+                </div>
+              )}
+              <label className="block text-sm">
+                <span className="text-black/50 text-xs">備考</span>
+                <textarea value={form.note} onChange={(e) => setField("note", e.target.value)} rows={4} className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+              </label>
+              <div className="flex gap-2">
+                <button onClick={saveEdit} disabled={saving} className="text-sm rounded-full bg-ink text-white px-5 py-2 hover:opacity-90 disabled:opacity-40">
+                  {saving ? "保存中…" : "保存する"}
+                </button>
+                <button onClick={() => setEditing(false)} disabled={saving} className="text-sm rounded-full border border-black/20 px-5 py-2 hover:bg-black/5 disabled:opacity-40">
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <button onClick={startEdit} className="text-xs rounded-full border border-black/20 px-4 py-1.5 hover:bg-black/5">
+                予約内容を編集する
+              </button>
+            </div>
           )}
 
           <div className="border-t border-black/10 pt-4 flex flex-wrap gap-2">
