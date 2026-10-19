@@ -4,6 +4,25 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import TimeAxis from "./TimeAxis";
 import { includesMaleGuests } from "../lib/lodging";
 import { requiresOnlinePayment } from "../lib/paymentRules";
+import { INQUIRY_ONLY_MESSAGE } from "../lib/salesRules";
+import { PHONE_DISPLAY, PHONE_TEL, CONTACT_FORM_URL } from "../lib/siteInfo";
+
+// オンライン予約不可の日程の案内（電話番号と、お問い合わせフォームへのリンク付き）
+function InquiryNotice() {
+  return (
+    <>
+      この日程はオンライン予約を受け付けておりません。恐れ入りますが、お電話（
+      <a href={`tel:${PHONE_TEL}`} className="underline font-bold">
+        {PHONE_DISPLAY}
+      </a>
+      ）または
+      <a href={CONTACT_FORM_URL} className="underline font-bold">
+        お問い合わせフォーム
+      </a>
+      からお問い合わせください。
+    </>
+  );
+}
 import { computeFlexibleEndTime, flexibleDurationHours } from "../lib/timeTemplates";
 
 const PAYJP_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYJP_PUBLIC_KEY || "";
@@ -645,6 +664,8 @@ export default function ReserveForm({ plan, payjpV2: payjpV2Prop = false, payjpV
                   </span>
                 )}
               </>
+            ) : availability.inquiryOnly ? (
+              <InquiryNotice />
             ) : (
               availability.reason || "この日程は予約できません。"
             )}
@@ -681,6 +702,22 @@ export default function ReserveForm({ plan, payjpV2: payjpV2Prop = false, payjpV
         <div className="rounded-2xl bg-white p-6 shadow-sm space-y-1">
           <h2 className="font-bold">お支払いについて</h2>
           <p className="text-sm text-black/60">このプランのお支払いは、ご利用当日に店頭でお願いいたします（オンライン決済は不要です）。</p>
+        </div>
+      )}
+
+      {payOnline && (payjpV2 || usesV1Card) && (
+        <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900 space-y-1">
+          <p>現在、VISA・MASTERカード、PayPayによる決済がご利用可能です。</p>
+          <p>JCB・AMEX・DINERSは申請中のため、ご利用いただけません。</p>
+          <p>
+            ご利用ご希望の場合は、お電話にてお問い合わせください。
+          </p>
+          <a href={`tel:${PHONE_TEL}`} className="inline-flex items-center gap-1.5 font-bold underline">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z" />
+            </svg>
+            {PHONE_DISPLAY}
+          </a>
         </div>
       )}
 
@@ -846,7 +883,11 @@ export default function ReserveForm({ plan, payjpV2: payjpV2Prop = false, payjpV
         </div>
       )}
 
-      {error && <div className="text-sm text-red-700 bg-red-50 rounded-lg px-4 py-3">{error}</div>}
+      {error && (
+        <div className="text-sm text-red-700 bg-red-50 rounded-lg px-4 py-3">
+          {error === INQUIRY_ONLY_MESSAGE ? <InquiryNotice /> : error}
+        </div>
+      )}
 
       {paymentStep && (
         <div className="text-sm text-black/60 bg-black/5 rounded-lg px-4 py-3">
