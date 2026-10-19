@@ -395,13 +395,14 @@ export default function AdminReservationsCalendarPage() {
                       確定する
                     </button>
                   )}
+                  {/* 返金の扱い（お客様都合／当店都合）を選ぶため、キャンセルは詳細ページで行う */}
                   {r.status !== "cancelled" && (
-                    <button
-                      onClick={() => updateStatus(r.id, "cancelled")}
+                    <a
+                      href={`/admin/reservations/${r.id}`}
                       className="text-xs rounded-full border border-red-300 text-red-600 px-4 py-1.5 hover:bg-red-50"
                     >
-                      キャンセル
-                    </button>
+                      キャンセル（詳細へ）
+                    </a>
                   )}
                 </div>
               </div>

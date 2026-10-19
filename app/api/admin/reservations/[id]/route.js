@@ -74,6 +74,11 @@ export async function GET(request, { params }) {
       card_brand: r.cardBrand,
       card_last4: r.cardLast4,
       estimated_refund_if_cancelled_now: estimatedRefundIfCancelledNow,
+      // 支払い確定済みで、まだ返金していない残額（「残額を返金する」ボタンの金額）
+      refundable_remaining:
+        r.paymentStatus === "captured" || r.paymentStatus === "partially_refunded"
+          ? Math.max(0, (r.paymentAmount || 0) - (r.refundedAmount || 0))
+          : 0,
     },
   });
 }
@@ -81,6 +86,37 @@ export async function GET(request, { params }) {
 export async function PATCH(request, { params }) {
   const { id: idParam } = await params;
   const body = await request.json();
+
+  // 残額の返金：キャンセル後に、規定どおりの一部返金だったものを、全額返金に切り替えたい場合など。
+  if (body.refundRemaining) {
+    const data = await load();
+    const r = data.reservations.find((x) => x.id === Number(idParam));
+    if (!r) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    if (!(r.paymentStatus === "captured" || r.paymentStatus === "partially_refunded") || !r.payjpChargeId) {
+      return NextResponse.json({ error: "not_refundable", message: "返金できる決済がありません。" }, { status: 400 });
+    }
+    const remaining = (r.paymentAmount || 0) - (r.refundedAmount || 0);
+    if (remaining <= 0) {
+      return NextResponse.json({ error: "nothing_to_refund", message: "返金できる残額がありません。" }, { status: 400 });
+    }
+    try {
+      await payjpGateway.refund(r.payjpChargeId, remaining);
+    } catch (e) {
+      if (e && e.payjpError && e.payjpError.code === "already_refunded") {
+        // PAY.JP側で先に全額返金済み：記録を合わせる。
+        r.refundedAmount = r.paymentAmount || r.refundedAmount || 0;
+        r.paymentStatus = "refunded";
+        await save(data);
+        return NextResponse.json({ ok: true, payment_status: r.paymentStatus, refunded_amount: r.refundedAmount });
+      }
+      const message = payjpGateway.errorMessage(e, "返金処理に失敗しました。PAY.JPの管理画面をご確認ください。");
+      return NextResponse.json({ error: "refund_failed", message }, { status: 402 });
+    }
+    r.refundedAmount = (r.refundedAmount || 0) + remaining;
+    r.paymentStatus = r.refundedAmount >= (r.paymentAmount || 0) ? "refunded" : "partially_refunded";
+    await save(data);
+    return NextResponse.json({ ok: true, payment_status: r.paymentStatus, refunded_amount: r.refundedAmount });
+  }
 
   // 予約内容の編集（お客様情報・備考・宿泊者の内訳）。日程・人数・オプション・金額は変更しない。
   if (body.edit) {

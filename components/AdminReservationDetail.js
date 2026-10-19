@@ -325,22 +325,57 @@ export default function AdminReservationDetail({ id }) {
             )}
             {reservation.status !== "cancelled" && (
               <button
-                onClick={() => updateStatus("cancelled")}
+                onClick={() => {
+                  const refund = reservation.payment_status === "captured" ? (reservation.estimated_refund_if_cancelled_now ?? 0) : null;
+                  const msg =
+                    refund != null
+                      ? `お客様都合でキャンセルします。キャンセルポリシーに基づき ¥${refund.toLocaleString()} を返金します（残りはキャンセル料）。よろしいですか？`
+                      : "この予約をキャンセルします。よろしいですか？";
+                  if (window.confirm(msg)) updateStatus("cancelled");
+                }}
                 disabled={updating}
                 className="text-sm rounded-full border border-red-300 text-red-600 px-5 py-2 hover:bg-red-50 disabled:opacity-40"
               >
-                キャンセルする
-                {reservation.payment_status === "captured" &&
-                  `（規定に基づき¥${(reservation.estimated_refund_if_cancelled_now ?? 0).toLocaleString()}返金）`}
+                {reservation.payment_status === "captured"
+                  ? `お客様都合でキャンセル（規定に基づき¥${(reservation.estimated_refund_if_cancelled_now ?? 0).toLocaleString()}返金）`
+                  : "キャンセルする"}
               </button>
             )}
             {reservation.status !== "cancelled" && reservation.payment_status === "captured" && (
               <button
-                onClick={() => updateStatus("cancelled", { fullRefund: true })}
+                onClick={() => {
+                  if (window.confirm(`当店都合でキャンセルします。全額 ¥${(reservation.refundable_remaining ?? 0).toLocaleString()} を返金します。よろしいですか？`)) {
+                    updateStatus("cancelled", { fullRefund: true });
+                  }
+                }}
                 disabled={updating}
                 className="text-sm rounded-full border border-amber-300 text-amber-700 px-5 py-2 hover:bg-amber-50 disabled:opacity-40"
               >
-                全額返金してキャンセル（当店都合）
+                当店都合でキャンセル（全額返金）
+              </button>
+            )}
+            {reservation.status === "cancelled" && reservation.refundable_remaining > 0 && (
+              <button
+                onClick={async () => {
+                  if (!window.confirm(`残額 ¥${reservation.refundable_remaining.toLocaleString()} を返金します（キャンセル料を請求しない場合）。よろしいですか？`)) return;
+                  setUpdating(true);
+                  setActionError(null);
+                  const res = await fetch(`/api/admin/reservations/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ refundRemaining: true }),
+                  });
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    setActionError(data.message || "返金に失敗しました。");
+                  }
+                  await load();
+                  setUpdating(false);
+                }}
+                disabled={updating}
+                className="text-sm rounded-full border border-amber-300 text-amber-700 px-5 py-2 hover:bg-amber-50 disabled:opacity-40"
+              >
+                残額¥{reservation.refundable_remaining.toLocaleString()}を返金する
               </button>
             )}
           </div>
