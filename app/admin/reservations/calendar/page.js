@@ -89,13 +89,56 @@ export default function AdminReservationsCalendarPage() {
   const [view, setView] = useState("plan"); // "plan" | "individual"
   const [showCancelled, setShowCancelled] = useState(false);
   const [planFilter, setPlanFilter] = useState("all");
+  const [blocks, setBlocks] = useState([]);
+  const [showBlockForm, setShowBlockForm] = useState(false);
+  const [blockForm, setBlockForm] = useState({ title: "", note: "", allDay: true, startDate: today, startTime: "09:00", endDate: today, endTime: "18:00" });
+  const [blockError, setBlockError] = useState("");
+  const [blockSaving, setBlockSaving] = useState(false);
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/admin/reservations", { cache: "no-store" });
+    const [res, bres] = await Promise.all([
+      fetch("/api/admin/reservations", { cache: "no-store" }),
+      fetch("/api/admin/private-blocks", { cache: "no-store" }),
+    ]);
     const data = await res.json();
     setReservations(data.reservations || []);
+    try {
+      const bdata = await bres.json();
+      setBlocks(bdata.blocks || []);
+    } catch (e) {
+      setBlocks([]);
+    }
     setLoading(false);
+  }
+
+  async function saveBlock(e) {
+    e.preventDefault();
+    setBlockError("");
+    const f = blockForm;
+    const startDatetime = `${f.startDate}T${f.allDay ? "00:00" : f.startTime}`;
+    const endDatetime = f.allDay ? `${addDays(f.endDate, 1)}T00:00` : `${f.endDate}T${f.endTime}`;
+    setBlockSaving(true);
+    const res = await fetch("/api/admin/private-blocks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: f.title, note: f.note, startDatetime, endDatetime }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBlockSaving(false);
+    if (!res.ok) {
+      setBlockError(data.message || "保存に失敗しました。");
+      return;
+    }
+    setBlockForm({ ...f, title: "", note: "" });
+    setShowBlockForm(false);
+    load();
+  }
+
+  async function removeBlock(id) {
+    if (!window.confirm("この予定を削除します。よろしいですか？（この日時は再び予約できるようになります）")) return;
+    await fetch(`/api/admin/private-blocks?id=${id}`, { method: "DELETE" });
+    load();
   }
 
   useEffect(() => {
@@ -135,6 +178,34 @@ export default function AdminReservationsCalendarPage() {
     return map;
   }, [reservations, showCancelled, planFilter]);
 
+  // 私用・予約不可の日時：日付ごとに展開（終了が0:00ちょうどなら、その日は含めない）
+  const blocksByDate = useMemo(() => {
+    const map = {};
+    for (const b of blocks) {
+      const startDay = b.startDatetime.slice(0, 10);
+      const endDay = b.endDatetime.slice(0, 10);
+      const lastDay = b.endDatetime.slice(11, 16) === "00:00" ? addDays(endDay, -1) : endDay;
+      let d = startDay;
+      let i = 0;
+      while (d <= lastDay && i < 400) {
+        if (!map[d]) map[d] = [];
+        map[d].push({ b, isStart: d === startDay });
+        d = addDays(d, 1);
+        i += 1;
+      }
+    }
+    return map;
+  }, [blocks]);
+
+  function blockTimeLabel(b) {
+    const allDay = b.startDatetime.slice(11, 16) === "00:00" && b.endDatetime.slice(11, 16) === "00:00";
+    if (allDay) {
+      const last = addDays(b.endDatetime.slice(0, 10), -1);
+      return b.startDatetime.slice(0, 10) === last ? `${b.startDatetime.slice(0, 10)} 終日` : `${b.startDatetime.slice(0, 10)} 〜 ${last}（終日）`;
+    }
+    return `${b.startDatetime.replace("T", " ")} 〜 ${b.endDatetime.replace("T", " ")}`;
+  }
+
   const weeks = useMemo(() => buildMonthGrid(year, month), [year, month]);
 
   function goPrevMonth() {
@@ -164,6 +235,7 @@ export default function AdminReservationsCalendarPage() {
   }
 
   const selectedEntries = byDate[selectedDate] || [];
+  const selectedBlocks = blocksByDate[selectedDate] || [];
 
   // マスの中身：プラン表示 = プランごとの件数、個別表示 = 予約を1件ずつ
   function renderPlanView(entries) {
@@ -230,8 +302,117 @@ export default function AdminReservationsCalendarPage() {
       <AdminNav />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">予約カレンダー</h1>
-        <button onClick={load} className="text-xs underline text-black/40">再読み込み</button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              setBlockForm((f) => ({ ...f, startDate: selectedDate, endDate: selectedDate }));
+              setShowBlockForm((v) => !v);
+            }}
+            className="text-xs rounded-full border border-black/20 px-4 py-1.5 hover:bg-black/5"
+          >
+            ＋ 私用・予約不可の日時を登録
+          </button>
+          <button onClick={load} className="text-xs underline text-black/40">再読み込み</button>
+        </div>
       </div>
+
+      {showBlockForm && (
+        <form onSubmit={saveBlock} className="rounded-2xl bg-white p-4 shadow-sm space-y-3 text-sm">
+          <div className="font-bold">私用・予約不可の日時を登録</div>
+          <p className="text-xs text-black/50">
+            登録した日時は、すべてのプランで予約できなくなります。自前のカレンダーにのみ表示され、Googleカレンダーには反映されません。
+          </p>
+          <label className="block">
+            <span className="text-xs text-black/50">タイトル（例：私用、メンテナンス、貸切（社内））</span>
+            <input
+              required
+              value={blockForm.title}
+              onChange={(e) => setBlockForm({ ...blockForm, title: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+            />
+          </label>
+          <label className="inline-flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={blockForm.allDay}
+              onChange={(e) => setBlockForm({ ...blockForm, allDay: e.target.checked })}
+            />
+            終日（時刻を指定しない）
+          </label>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="text-xs text-black/50">開始日</span>
+              <input
+                type="date"
+                required
+                value={blockForm.startDate}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setBlockForm((f) => ({ ...f, startDate: v, endDate: f.endDate < v ? v : f.endDate }));
+                }}
+                className="mt-1 block rounded-lg border border-black/15 px-3 py-2"
+              />
+            </label>
+            {!blockForm.allDay && (
+              <label className="block">
+                <span className="text-xs text-black/50">開始時刻</span>
+                <input
+                  type="time"
+                  required
+                  value={blockForm.startTime}
+                  onChange={(e) => setBlockForm({ ...blockForm, startTime: e.target.value })}
+                  className="mt-1 block rounded-lg border border-black/15 px-3 py-2"
+                />
+              </label>
+            )}
+            <label className="block">
+              <span className="text-xs text-black/50">終了日</span>
+              <input
+                type="date"
+                required
+                value={blockForm.endDate}
+                min={blockForm.startDate}
+                onChange={(e) => setBlockForm({ ...blockForm, endDate: e.target.value })}
+                className="mt-1 block rounded-lg border border-black/15 px-3 py-2"
+              />
+            </label>
+            {!blockForm.allDay && (
+              <label className="block">
+                <span className="text-xs text-black/50">終了時刻</span>
+                <input
+                  type="time"
+                  required
+                  value={blockForm.endTime}
+                  onChange={(e) => setBlockForm({ ...blockForm, endTime: e.target.value })}
+                  className="mt-1 block rounded-lg border border-black/15 px-3 py-2"
+                />
+              </label>
+            )}
+          </div>
+          <label className="block">
+            <span className="text-xs text-black/50">メモ（任意）</span>
+            <textarea
+              rows={2}
+              value={blockForm.note}
+              onChange={(e) => setBlockForm({ ...blockForm, note: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"
+            />
+          </label>
+          {blockError && <p className="text-xs text-red-600">{blockError}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={blockSaving}
+              className="text-xs rounded-full bg-ink text-white px-5 py-2 hover:opacity-90 disabled:opacity-50"
+            >
+              {blockSaving ? "保存中…" : "登録する"}
+            </button>
+            <button type="button" onClick={() => setShowBlockForm(false)} className="text-xs rounded-full border border-black/20 px-5 py-2 hover:bg-black/5">
+              閉じる
+            </button>
+          </div>
+        </form>
+      )}
 
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <div className="inline-flex rounded-full border border-black/15 overflow-hidden">
@@ -284,6 +465,9 @@ export default function AdminReservationsCalendarPage() {
         )}
       </div>
       <div className="flex flex-wrap gap-2">
+        <span className="text-[10px] rounded-full px-2 py-0.5" style={{ background: "#e5e7eb", color: "#374151", border: "1px dashed #9ca3af" }}>
+          私用・予約不可
+        </span>
         {plans.map((p) => (
           <span
             key={p.id}
@@ -338,6 +522,21 @@ export default function AdminReservationsCalendarPage() {
                       {Number(day.slice(8, 10))}
                       {isToday && <span className="ml-1 text-[10px] text-emerald-600">今日</span>}
                     </div>
+                    {(blocksByDate[day] || []).length > 0 && (
+                      <div className="mt-1 space-y-0.5">
+                        {(blocksByDate[day] || []).slice(0, 2).map(({ b, isStart }) => (
+                          <div
+                            key={`b${b.id}`}
+                            className="text-[10px] leading-tight rounded px-1 py-0.5 truncate"
+                            style={{ background: "#e5e7eb", color: "#374151", border: "1px dashed #9ca3af" }}
+                            title={`${b.title}（${blockTimeLabel(b)}）${b.note ? `：${b.note}` : ""}`}
+                          >
+                            {isStart && b.startDatetime.slice(11, 16) !== "00:00" ? `${b.startDatetime.slice(11, 16)} ` : ""}
+                            {b.title}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {entries.length > 0 && (view === "plan" ? renderPlanView(entries) : renderIndividualView(entries))}
                   </button>
                 );
@@ -349,6 +548,23 @@ export default function AdminReservationsCalendarPage() {
 
       <div className="space-y-3">
         <h2 className="font-bold text-sm">{selectedDate} の予約（{selectedEntries.length}件）</h2>
+        {selectedBlocks.map(({ b }) => (
+          <div key={`b${b.id}`} className="rounded-2xl bg-white p-4 shadow-sm" style={{ borderLeft: "5px solid #9ca3af" }}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="text-xs rounded-full px-2 py-0.5" style={{ background: "#e5e7eb", color: "#374151" }}>私用・予約不可</span>{" "}
+                <span className="font-bold">{b.title}</span>
+              </div>
+              <div className="text-sm text-black/50">{blockTimeLabel(b)}</div>
+            </div>
+            {b.note && <div className="mt-1 text-xs text-black/40 whitespace-pre-wrap">{b.note}</div>}
+            <div className="mt-3">
+              <button onClick={() => removeBlock(b.id)} className="text-xs rounded-full border border-red-300 text-red-600 px-4 py-1.5 hover:bg-red-50">
+                削除
+              </button>
+            </div>
+          </div>
+        ))}
         {selectedEntries.length === 0 ? (
           <p className="text-sm text-black/40">この日の予約はありません。</p>
         ) : (
