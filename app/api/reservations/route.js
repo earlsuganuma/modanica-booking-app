@@ -15,6 +15,7 @@ const payjpV2 = require("../../../lib/payjpV2Client");
 const { requiresOnlinePayment } = require("../../../lib/paymentRules");
 const { validateBookingDate } = require("../../../lib/bookingWindow");
 const payjpGateway = require("../../../lib/paymentGateway");
+const { syncReservation } = require("../../../lib/googleCalendar");
 const { isStayPlan, resolveGuestBreakdown } = require("../../../lib/lodging");
 
 export const dynamic = "force-dynamic";
@@ -226,6 +227,8 @@ export async function POST(request) {
   await save(data);
 
   // 予約受付メール（お客様宛）＋ 新規予約通知（運営者宛・ADMIN_NOTIFY_EMAIL設定時のみ）
+  await syncReservation(reservation, plan, data.options);
+
   const receivedMail = reservationReceived(reservation, plan, data.options);
   await sendMail({ type: "reservation_received", to: customerEmail, ...receivedMail });
   if (ADMIN_NOTIFY_EMAIL) {

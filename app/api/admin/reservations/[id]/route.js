@@ -8,6 +8,7 @@ const payjpGateway = require("../../../../../lib/paymentGateway");
 const { getConfirmedNote } = require("../../../../../lib/planMailNotes");
 const { isStayPlan, includesMaleGuests } = require("../../../../../lib/lodging");
 const { getPlan } = require("../../../../../lib/plans");
+const { syncReservation } = require("../../../../../lib/googleCalendar");
 const { refundAmount: calcRefundAmount } = require("../../../../../lib/cancellationPolicy");
 
 export const dynamic = "force-dynamic";
@@ -164,6 +165,7 @@ export async function PATCH(request, { params }) {
     r.customerAddress = address || null;
     r.note = note || null;
     await save(data);
+    await syncReservation(r, data.plans.find((p) => p.id === r.planId), data.options);
     return NextResponse.json({ ok: true });
   }
 
@@ -239,6 +241,7 @@ export async function PATCH(request, { params }) {
     r.status = status;
     await save(data);
   }
+  await syncReservation(r, data.plans.find((p) => p.id === r.planId), data.options);
 
   // ステータスが実際に変わったときだけメール送信する（同じ操作の連打で二重送信しないように）
   // メールアドレスのない予約（電話予約など）にはメールを送らない。

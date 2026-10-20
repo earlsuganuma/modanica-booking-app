@@ -4,6 +4,7 @@ const { computeAtRisk } = require("../../../../lib/priorityRisk");
 const { buildRepeatCounter } = require("../../../../lib/repeater");
 
 const { save } = require("../../../../lib/store");
+const { syncReservation } = require("../../../../lib/googleCalendar");
 const { getPlan } = require("../../../../lib/plans");
 const { resolveDatetime } = require("../../../../lib/timeTemplates");
 const { hasConflict } = require("../../../../lib/availability");
@@ -131,6 +132,7 @@ export async function POST(request) {
   data.reservations.push(reservation);
   data.nextReservationId = id + 1;
   await save(data);
+  await syncReservation(reservation, plan, data.options);
 
   return NextResponse.json({ reservationId: id, price: { ...price, total: totalPrice }, status });
 }
