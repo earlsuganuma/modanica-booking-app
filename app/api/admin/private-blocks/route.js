@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 const { listBlocks, createBlock, deleteBlock } = require("../../../../lib/privateBlocks");
+const { listPlans } = require("../../../../lib/plans");
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +26,15 @@ export async function POST(request) {
   if (endDatetime <= startDatetime) {
     return NextResponse.json({ error: "invalid_range", message: "終了は開始より後の日時にしてください。" }, { status: 400 });
   }
+  // 対象プラン（空＝全プラン）。存在するプランIDだけを受け付ける。
+  const plans = await listPlans();
+  const validIds = new Set(plans.map((pl) => pl.id));
+  const planIds = Array.isArray(body.planIds) ? body.planIds.filter((id) => validIds.has(id)) : [];
+  if (Array.isArray(body.planIds) && body.planIds.length && !planIds.length) {
+    return NextResponse.json({ error: "invalid_plans", message: "対象プランが正しくありません。" }, { status: 400 });
+  }
   try {
-    const block = await createBlock({ title, note, startDatetime, endDatetime });
+    const block = await createBlock({ title, note, startDatetime, endDatetime, planIds });
     return NextResponse.json({ ok: true, block });
   } catch (e) {
     console.error("createBlock failed:", e.message);

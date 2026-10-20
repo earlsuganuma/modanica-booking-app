@@ -11,5 +11,8 @@ CREATE TABLE IF NOT EXISTS private_blocks (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- 対象プラン（カンマ区切りのプランID。空＝全プラン）
+ALTER TABLE private_blocks ADD COLUMN IF NOT EXISTS plan_ids TEXT NOT NULL DEFAULT '';
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON private_blocks TO modanica;
 GRANT USAGE, SELECT ON SEQUENCE private_blocks_id_seq TO modanica;

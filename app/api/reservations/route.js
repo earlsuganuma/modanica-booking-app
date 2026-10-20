@@ -95,6 +95,7 @@ export async function POST(request) {
     startDatetime: start,
     endDatetime: end,
     exclusivity: plan.exclusivity,
+    planId: plan.id,
   });
   if (conflict) {
     const message = adjustable

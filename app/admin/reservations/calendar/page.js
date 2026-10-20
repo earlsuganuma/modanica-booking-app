@@ -91,16 +91,24 @@ export default function AdminReservationsCalendarPage() {
   const [planFilter, setPlanFilter] = useState("all");
   const [blocks, setBlocks] = useState([]);
   const [showBlockForm, setShowBlockForm] = useState(false);
-  const [blockForm, setBlockForm] = useState({ title: "", note: "", allDay: true, startDate: today, startTime: "09:00", endDate: today, endTime: "18:00" });
+  const [allPlans, setAllPlans] = useState([]);
+  const [blockForm, setBlockForm] = useState({ title: "", note: "", allDay: true, allPlans: true, planIds: [], startDate: today, startTime: "09:00", endDate: today, endTime: "18:00" });
   const [blockError, setBlockError] = useState("");
   const [blockSaving, setBlockSaving] = useState(false);
 
   async function load() {
     setLoading(true);
-    const [res, bres] = await Promise.all([
+    const [res, bres, pres] = await Promise.all([
       fetch("/api/admin/reservations", { cache: "no-store" }),
       fetch("/api/admin/private-blocks", { cache: "no-store" }),
+      fetch("/api/admin/plans", { cache: "no-store" }),
     ]);
+    try {
+      const pdata = await pres.json();
+      setAllPlans((pdata.plans || []).map((p) => ({ id: p.id, name: p.name })));
+    } catch (e) {
+      setAllPlans([]);
+    }
     const data = await res.json();
     setReservations(data.reservations || []);
     try {
@@ -118,11 +126,15 @@ export default function AdminReservationsCalendarPage() {
     const f = blockForm;
     const startDatetime = `${f.startDate}T${f.allDay ? "00:00" : f.startTime}`;
     const endDatetime = f.allDay ? `${addDays(f.endDate, 1)}T00:00` : `${f.endDate}T${f.endTime}`;
+    if (!f.allPlans && f.planIds.length === 0) {
+      setBlockError("止めるプランを1つ以上選ぶか、「すべてのプラン」にチェックしてください。");
+      return;
+    }
     setBlockSaving(true);
     const res = await fetch("/api/admin/private-blocks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: f.title, note: f.note, startDatetime, endDatetime }),
+      body: JSON.stringify({ title: f.title, note: f.note, startDatetime, endDatetime, planIds: f.allPlans ? [] : f.planIds }),
     });
     const data = await res.json().catch(() => ({}));
     setBlockSaving(false);
@@ -196,6 +208,11 @@ export default function AdminReservationsCalendarPage() {
     }
     return map;
   }, [blocks]);
+
+  function blockScopeLabel(b) {
+    if (!b.planIds || !b.planIds.length) return "全プラン";
+    return b.planIds.map((id) => (allPlans.find((p) => p.id === id) || { name: id }).name).join("、");
+  }
 
   function blockTimeLabel(b) {
     const allDay = b.startDatetime.slice(11, 16) === "00:00" && b.endDatetime.slice(11, 16) === "00:00";
@@ -320,8 +337,38 @@ export default function AdminReservationsCalendarPage() {
         <form onSubmit={saveBlock} className="rounded-2xl bg-white p-4 shadow-sm space-y-3 text-sm">
           <div className="font-bold">私用・予約不可の日時を登録</div>
           <p className="text-xs text-black/50">
-            登録した日時は、すべてのプランで予約できなくなります。自前のカレンダーにのみ表示され、Googleカレンダーには反映されません。
+            登録した日時は、選んだプランで予約できなくなります。自前のカレンダーにのみ表示され、Googleカレンダーには反映されません。
           </p>
+          <div className="space-y-1.5">
+            <span className="text-xs text-black/50">予約を止めるプラン</span>
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={blockForm.allPlans}
+                onChange={(e) => setBlockForm({ ...blockForm, allPlans: e.target.checked })}
+              />
+              すべてのプラン
+            </label>
+            {!blockForm.allPlans && (
+              <div className="grid gap-1 sm:grid-cols-2 pl-5">
+                {allPlans.map((pl) => (
+                  <label key={pl.id} className="flex items-center gap-1.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={blockForm.planIds.includes(pl.id)}
+                      onChange={(e) =>
+                        setBlockForm((f) => ({
+                          ...f,
+                          planIds: e.target.checked ? [...f.planIds, pl.id] : f.planIds.filter((x) => x !== pl.id),
+                        }))
+                      }
+                    />
+                    {pl.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
           <label className="block">
             <span className="text-xs text-black/50">タイトル（例：私用、メンテナンス、貸切（社内））</span>
             <input
@@ -529,7 +576,7 @@ export default function AdminReservationsCalendarPage() {
                             key={`b${b.id}`}
                             className="text-[10px] leading-tight rounded px-1 py-0.5 truncate"
                             style={{ background: "#e5e7eb", color: "#374151", border: "1px dashed #9ca3af" }}
-                            title={`${b.title}（${blockTimeLabel(b)}）${b.note ? `：${b.note}` : ""}`}
+                            title={`${b.title}（${blockTimeLabel(b)}／${blockScopeLabel(b)}）${b.note ? `：${b.note}` : ""}`}
                           >
                             {isStart && b.startDatetime.slice(11, 16) !== "00:00" ? `${b.startDatetime.slice(11, 16)} ` : ""}
                             {b.title}
@@ -557,6 +604,7 @@ export default function AdminReservationsCalendarPage() {
               </div>
               <div className="text-sm text-black/50">{blockTimeLabel(b)}</div>
             </div>
+            <div className="mt-1 text-xs text-black/50">対象：{blockScopeLabel(b)}</div>
             {b.note && <div className="mt-1 text-xs text-black/40 whitespace-pre-wrap">{b.note}</div>}
             <div className="mt-3">
               <button onClick={() => removeBlock(b.id)} className="text-xs rounded-full border border-red-300 text-red-600 px-4 py-1.5 hover:bg-red-50">
