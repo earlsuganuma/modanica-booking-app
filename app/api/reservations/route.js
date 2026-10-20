@@ -13,6 +13,7 @@ const { checkRateLimit } = require("../../../lib/rateLimit");
 const payjpClient = require("../../../lib/payjpClient");
 const payjpV2 = require("../../../lib/payjpV2Client");
 const { requiresOnlinePayment } = require("../../../lib/paymentRules");
+const { validateBookingDate } = require("../../../lib/bookingWindow");
 const payjpGateway = require("../../../lib/paymentGateway");
 const { isStayPlan, resolveGuestBreakdown } = require("../../../lib/lodging");
 
@@ -56,6 +57,8 @@ export async function POST(request) {
     return NextResponse.json({ error: "address_required", message: "宿泊者名簿の記載のため、ご住所の入力をお願いします。" }, { status: 400 });
   }
   const { guestCount, guestMale, guestFemale, guestChildren, childrenCount } = resolveGuestBreakdown(plan, body);
+  const windowError = validateBookingDate(date);
+  if (windowError) return NextResponse.json({ error: "out_of_booking_window", message: windowError }, { status: 400 });
   const data = await load();
   if (getConfirmationMode(plan, date, data.priceRules) === "inquiry_only") {
     return NextResponse.json({ error: "inquiry_only", message: INQUIRY_ONLY_MESSAGE }, { status: 409 });

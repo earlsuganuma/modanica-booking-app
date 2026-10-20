@@ -5,6 +5,8 @@ import TimeAxis from "./TimeAxis";
 import { includesMaleGuests } from "../lib/lodging";
 import { requiresOnlinePayment } from "../lib/paymentRules";
 import { INQUIRY_ONLY_MESSAGE } from "../lib/salesRules";
+import { maxBookableDate } from "../lib/bookingWindow";
+import { todayStr } from "../lib/dateUtil";
 import { PHONE_DISPLAY, PHONE_TEL, CONTACT_FORM_URL } from "../lib/siteInfo";
 
 // オンライン予約不可の日程の案内（電話番号と、お問い合わせフォームへのリンク付き）
@@ -433,6 +435,8 @@ export default function ReserveForm({ plan, payjpV2: payjpV2Prop = false, payjpV
             <input
               type="date"
               required
+              min={adminMode ? undefined : todayStr()}
+              max={adminMode ? undefined : maxBookableDate()}
               value={date}
               onChange={(e) => setDate(e.target.value)}
               className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2"

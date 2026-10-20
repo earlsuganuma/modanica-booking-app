@@ -12,6 +12,7 @@ const { resolveGuestBreakdown, isStayPlan } = require("../../../../../lib/lodgin
 const payjpV2 = require("../../../../../lib/payjpV2Client");
 const draftToken = require("../../../../../lib/draftToken");
 const { requiresOnlinePayment } = require("../../../../../lib/paymentRules");
+const { validateBookingDate } = require("../../../../../lib/bookingWindow");
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,9 @@ export async function POST(request) {
   }
 
   const { guestCount, childrenCount } = resolveGuestBreakdown(plan, body);
+
+  const windowError = validateBookingDate(date);
+  if (windowError) return NextResponse.json({ error: "out_of_booking_window", message: windowError }, { status: 400 });
 
   const data = await load();
   if (getConfirmationMode(plan, date, data.priceRules) === "inquiry_only") {

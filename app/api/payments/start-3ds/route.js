@@ -11,6 +11,7 @@ const { checkRateLimit } = require("../../../../lib/rateLimit");
 const payjpClient = require("../../../../lib/payjpClient");
 const { resolveGuestBreakdown } = require("../../../../lib/lodging");
 const { requiresOnlinePayment } = require("../../../../lib/paymentRules");
+const { validateBookingDate } = require("../../../../lib/bookingWindow");
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,9 @@ export async function POST(request) {
   if (!plan) return NextResponse.json({ error: "plan_not_found" }, { status: 404 });
 
   const { guestCount, childrenCount } = resolveGuestBreakdown(plan, body);
+
+  const windowError = validateBookingDate(date);
+  if (windowError) return NextResponse.json({ error: "out_of_booking_window", message: windowError }, { status: 400 });
 
   const data = await load();
   if (getConfirmationMode(plan, date, data.priceRules) === "inquiry_only") {
