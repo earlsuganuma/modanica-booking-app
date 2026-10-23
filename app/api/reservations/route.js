@@ -222,6 +222,7 @@ export async function POST(request) {
     refundedAmount: 0,
     cardBrand,
     cardLast4,
+    capturedAt: paymentStatus === "captured" ? new Date().toISOString() : null,
   };
   data.reservations.push(reservation);
   data.nextReservationId = id + 1;

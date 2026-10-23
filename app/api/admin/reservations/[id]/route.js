@@ -203,6 +203,7 @@ export async function PATCH(request, { params }) {
       try {
         const capturedAmount = await payjpGateway.capture(r.payjpChargeId);
         r.paymentStatus = "captured";
+        r.capturedAt = new Date().toISOString();
         r.paymentAmount = capturedAmount;
       } catch (e) {
         const message = payjpGateway.errorMessage(

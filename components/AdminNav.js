@@ -5,6 +5,7 @@ const links = [
   { href: "/admin/reservations", label: "予約一覧" },
   { href: "/admin/reservations/calendar", label: "予約カレンダー" },
   { href: "/admin/reports", label: "売上レポート" },
+  { href: "/admin/payouts", label: "入金予定" },
   { href: "/admin/plans", label: "プラン詳細編集" },
   { href: "/admin/calendar", label: "料金設定" },
   { href: "/admin/options", label: "オプション管理" },
