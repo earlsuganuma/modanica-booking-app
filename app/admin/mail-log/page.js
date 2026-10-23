@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AdminNav from "../../../components/AdminNav";
 
 const TYPE_LABEL = {
@@ -16,11 +16,17 @@ const STATUS_BADGE = {
   failed: { label: "送信失敗", bg: "#fee2e2", color: "#991b1b" },
 };
 
+const PAGE_SIZE = 30;
+
 export default function MailLogPage() {
   const [mailLog, setMailLog] = useState([]);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [keyword, setKeyword] = useState("");
+  const [limit, setLimit] = useState(PAGE_SIZE);
 
   async function load() {
     setLoading(true);
@@ -35,6 +41,24 @@ export default function MailLogPage() {
     load();
   }, []);
 
+  // 新しい順に並べ、種別・状態・キーワード（宛先／件名）で絞り込む。
+  const filtered = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    return [...mailLog]
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .filter((m) => (typeFilter === "all" ? true : m.type === typeFilter))
+      .filter((m) => (statusFilter === "all" ? true : m.status === statusFilter))
+      .filter((m) => !kw || `${m.to || ""} ${m.subject || ""}`.toLowerCase().includes(kw));
+  }, [mailLog, typeFilter, statusFilter, keyword]);
+
+  const shown = filtered.slice(0, limit);
+
+  function fmt(iso) {
+    const d = new Date(iso);
+    const p2 = (n) => String(n).padStart(2, "0");
+    return `${d.getMonth() + 1}/${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  }
+
   return (
     <div className="space-y-6">
       <AdminNav />
@@ -42,7 +66,7 @@ export default function MailLogPage() {
         <div>
           <h1 className="text-xl font-bold">メール送信ログ</h1>
           <p className="text-sm text-black/50 mt-1">
-            予約の受付・確定・キャンセル時に送信されるメールの記録です。
+            予約の受付・確定・キャンセル時に送信されるメールの記録です（新しい順）。
           </p>
         </div>
         <button onClick={load} className="text-xs underline text-black/40">再読み込み</button>
@@ -56,40 +80,81 @@ export default function MailLogPage() {
         </div>
       )}
 
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <select
+          value={typeFilter}
+          onChange={(e) => { setTypeFilter(e.target.value); setLimit(PAGE_SIZE); }}
+          className="rounded-full border border-black/15 px-3 py-1.5"
+        >
+          <option value="all">すべての種類</option>
+          {Object.entries(TYPE_LABEL).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setLimit(PAGE_SIZE); }}
+          className="rounded-full border border-black/15 px-3 py-1.5"
+        >
+          <option value="all">すべての状態</option>
+          <option value="sent">送信済み</option>
+          <option value="failed">送信失敗</option>
+          <option value="logged">未送信（記録のみ）</option>
+        </select>
+        <input
+          value={keyword}
+          onChange={(e) => { setKeyword(e.target.value); setLimit(PAGE_SIZE); }}
+          placeholder="宛先・件名で検索"
+          className="rounded-full border border-black/15 px-4 py-1.5 w-56"
+        />
+        <span className="text-black/40">{filtered.length}件</span>
+      </div>
+
       {loading ? (
         <p className="text-sm text-black/40">読み込み中…</p>
-      ) : mailLog.length === 0 ? (
-        <p className="text-sm text-black/40">まだメールの送信記録はありません。</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-black/40">該当するメールの記録はありません。</p>
       ) : (
-        <div className="space-y-3">
-          {mailLog.map((m) => {
+        <div className="rounded-2xl bg-white shadow-sm overflow-hidden divide-y divide-black/5">
+          {shown.map((m) => {
             const badge = STATUS_BADGE[m.status] || STATUS_BADGE.logged;
+            const open = expanded === m.id;
             return (
-              <div key={m.id} className="rounded-2xl bg-white p-4 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <span className="font-bold text-sm">{TYPE_LABEL[m.type] || m.type}</span>{" "}
-                    <span className="badge" style={{ background: badge.bg, color: badge.color }}>
-                      {badge.label}
-                    </span>
-                  </div>
-                  <div className="text-xs text-black/40">{new Date(m.createdAt).toLocaleString("ja-JP")}</div>
-                </div>
-                <div className="mt-2 text-sm text-black/60">宛先：{m.to || "（なし）"}</div>
-                <div className="text-sm text-black/80">件名：{m.subject}</div>
-                {m.error && <div className="mt-1 text-xs text-red-600">エラー：{m.error}</div>}
+              <div key={m.id}>
                 <button
-                  onClick={() => setExpanded(expanded === m.id ? null : m.id)}
-                  className="mt-2 text-xs text-black/40 underline"
+                  onClick={() => setExpanded(open ? null : m.id)}
+                  className="w-full text-left px-4 py-2.5 hover:bg-black/[0.03] flex flex-wrap items-center gap-x-3 gap-y-1"
                 >
-                  {expanded === m.id ? "本文を閉じる" : "本文を表示"}
+                  <span className="text-xs text-black/40 w-24 shrink-0">{fmt(m.createdAt)}</span>
+                  <span className="badge shrink-0" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
+                  <span className="text-xs text-black/50 shrink-0">{TYPE_LABEL[m.type] || m.type}</span>
+                  <span className="text-xs text-black/60 truncate max-w-[16rem]">{m.to || "（なし）"}</span>
+                  <span className="text-sm text-black/80 truncate flex-1 min-w-[10rem]">{m.subject}</span>
+                  <span className="text-xs text-black/30">{open ? "▲" : "▼"}</span>
                 </button>
-                {expanded === m.id && (
-                  <pre className="mt-2 whitespace-pre-wrap text-xs bg-black/[0.03] rounded-lg p-3">{m.body}</pre>
+                {open && (
+                  <div className="px-4 pb-4 space-y-2">
+                    <div className="text-xs text-black/50">
+                      {new Date(m.createdAt).toLocaleString("ja-JP")} ／ 宛先：{m.to || "（なし）"}
+                    </div>
+                    {m.error && <div className="text-xs text-red-600">エラー：{m.error}</div>}
+                    <pre className="whitespace-pre-wrap text-xs bg-black/[0.03] rounded-lg p-3">{m.body}</pre>
+                  </div>
                 )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {filtered.length > shown.length && (
+        <div className="text-center">
+          <button
+            onClick={() => setLimit(limit + PAGE_SIZE)}
+            className="text-xs rounded-full border border-black/20 px-5 py-2 hover:bg-black/5"
+          >
+            さらに{Math.min(PAGE_SIZE, filtered.length - shown.length)}件を表示（残り{filtered.length - shown.length}件）
+          </button>
         </div>
       )}
     </div>
