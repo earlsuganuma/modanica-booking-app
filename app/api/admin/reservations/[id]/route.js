@@ -170,7 +170,7 @@ export async function PATCH(request, { params }) {
   }
 
   const { status, fullRefund } = body;
-  if (!["confirmed", "cancelled", "pending_review"].includes(status)) {
+  if (!["confirmed", "cancelled", "pending_review", "visited", "no_show"].includes(status)) {
     return NextResponse.json({ error: "invalid_status" }, { status: 400 });
   }
   const data = await load();
@@ -179,6 +179,14 @@ export async function PATCH(request, { params }) {
   if (!r) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const previousStatus = r.status;
+
+  // 来店済み／未来店は、確定した予約（またはその来店記録の修正）だけに付けられる。決済・メールの処理は行わない。
+  if ((status === "visited" || status === "no_show") && !["confirmed", "visited", "no_show"].includes(previousStatus)) {
+    return NextResponse.json(
+      { error: "not_confirmed", message: "来店の記録は、確定した予約にのみ付けられます。先に「確定」にしてください。" },
+      { status: 409 }
+    );
+  }
 
   // 決済のある予約は、キャンセル後に「確定」「要確認」へ戻せない（返金済みなのに枠だけ埋まる事故の防止）。
   if (previousStatus === "cancelled" && status !== "cancelled" && r.paymentStatus && r.paymentStatus !== "none") {
@@ -247,7 +255,8 @@ export async function PATCH(request, { params }) {
   // メールアドレスのない予約（電話予約など）にはメールを送らない。
   if (status !== previousStatus && r.customerEmail) {
     const plan = data.plans.find((p) => p.id === r.planId);
-    if (status === "confirmed") {
+    // 来店済み／未来店から「確定」へ戻す操作では、確定メールを再送しない。
+    if (status === "confirmed" && previousStatus !== "visited" && previousStatus !== "no_show") {
       const extraNote = await getConfirmedNote(r.planId);
       const mail = reservationConfirmed(r, plan, extraNote, data.options);
       await sendMail({ type: "reservation_confirmed", to: r.customerEmail, ...mail });

@@ -6,16 +6,22 @@ import AdminNav from "../../../../components/AdminNav";
 const STATUS_LABEL = {
   pending_review: "要確認",
   confirmed: "確定",
+  visited: "来店済み",
+  no_show: "未来店",
   cancelled: "キャンセル",
 };
 const STATUS_BADGE = {
   pending_review: "badge badge-manual",
   confirmed: "badge badge-confirmed",
+  visited: "badge badge-confirmed",
+  no_show: "badge badge-cancelled",
   cancelled: "badge badge-cancelled",
 };
 const STATUS_BAR = {
   pending_review: "#f59e0b",
   confirmed: "#10b981",
+  visited: "#0ea5e9",
+  no_show: "#6b7280",
   cancelled: "#9ca3af",
 };
 
@@ -504,6 +510,8 @@ export default function AdminReservationsCalendarPage() {
           <>
             <span><span className="inline-block w-2 h-3 align-middle mr-1" style={{ background: STATUS_BAR.confirmed }} />確定</span>
             <span><span className="inline-block w-2 h-3 align-middle mr-1" style={{ background: STATUS_BAR.pending_review }} />要確認</span>
+            <span><span className="inline-block w-2 h-3 align-middle mr-1" style={{ background: STATUS_BAR.visited }} />来店済み</span>
+            <span><span className="inline-block w-2 h-3 align-middle mr-1" style={{ background: STATUS_BAR.no_show }} />未来店</span>
             {showCancelled && (
               <span><span className="inline-block w-2 h-3 align-middle mr-1" style={{ background: STATUS_BAR.cancelled }} />キャンセル</span>
             )}
@@ -651,7 +659,7 @@ export default function AdminReservationsCalendarPage() {
                   >
                     詳細を見る
                   </a>
-                  {r.status !== "confirmed" && r.status !== "cancelled" && (
+                  {r.status !== "confirmed" && r.status !== "visited" && r.status !== "no_show" && r.status !== "cancelled" && (
                     <button
                       onClick={() => updateStatus(r.id, "confirmed")}
                       className="text-xs rounded-full bg-emerald-600 text-white px-4 py-1.5 hover:opacity-90"

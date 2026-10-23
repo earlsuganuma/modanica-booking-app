@@ -6,11 +6,15 @@ import AdminNav from "./AdminNav";
 const STATUS_LABEL = {
   pending_review: "要確認",
   confirmed: "確定",
+  visited: "来店済み",
+  no_show: "未来店",
   cancelled: "キャンセル",
 };
 const STATUS_BADGE = {
   pending_review: "badge badge-manual",
   confirmed: "badge badge-confirmed",
+  visited: "badge badge-confirmed",
+  no_show: "badge badge-cancelled",
   cancelled: "badge badge-cancelled",
 };
 const PAYMENT_STATUS_LABEL = {
@@ -311,7 +315,27 @@ export default function AdminReservationDetail({ id }) {
                 disabled={updating}
                 className="text-sm rounded-full bg-emerald-600 text-white px-5 py-2 hover:opacity-90 disabled:opacity-40"
               >
-                確定する{reservation.payment_status === "authorized" ? "（決済確定）" : ""}
+                {reservation.status === "visited" || reservation.status === "no_show"
+                  ? "確定に戻す"
+                  : `確定する${reservation.payment_status === "authorized" ? "（決済確定）" : ""}`}
+              </button>
+            )}
+            {(reservation.status === "confirmed" || reservation.status === "no_show") && (
+              <button
+                onClick={() => updateStatus("visited")}
+                disabled={updating}
+                className="text-sm rounded-full bg-sky-600 text-white px-5 py-2 hover:opacity-90 disabled:opacity-40"
+              >
+                来店済みにする
+              </button>
+            )}
+            {(reservation.status === "confirmed" || reservation.status === "visited") && (
+              <button
+                onClick={() => updateStatus("no_show")}
+                disabled={updating}
+                className="text-sm rounded-full border border-black/20 px-5 py-2 hover:bg-black/5 disabled:opacity-40"
+              >
+                未来店にする
               </button>
             )}
             {reservation.status !== "pending_review" && !(reservation.status === "cancelled" && reservation.payment_status !== "none") && (

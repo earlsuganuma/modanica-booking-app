@@ -6,11 +6,15 @@ import AdminNav from "../../components/AdminNav";
 const STATUS_LABEL = {
   pending_review: "要確認",
   confirmed: "確定",
+  visited: "来店済み",
+  no_show: "未来店",
   cancelled: "キャンセル",
 };
 const STATUS_BADGE = {
   pending_review: "badge badge-manual",
   confirmed: "badge badge-confirmed",
+  visited: "badge badge-confirmed",
+  no_show: "badge badge-cancelled",
   cancelled: "badge badge-cancelled",
 };
 
@@ -114,7 +118,7 @@ export default function AdminDashboardPage() {
           <a href={`/admin/reservations/${r.id}`} className="text-xs rounded-full border border-black/20 px-4 py-1.5 hover:bg-black/5">
             詳細を見る
           </a>
-          {r.status !== "confirmed" && (
+          {r.status !== "confirmed" && r.status !== "visited" && r.status !== "no_show" && (
             <button
               onClick={() => updateStatus(r.id, "confirmed")}
               className="text-xs rounded-full bg-emerald-600 text-white px-4 py-1.5 hover:opacity-90"

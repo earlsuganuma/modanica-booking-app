@@ -6,11 +6,15 @@ import AdminNav from "../../../components/AdminNav";
 const STATUS_LABEL = {
   pending_review: "要確認",
   confirmed: "確定",
+  visited: "来店済み",
+  no_show: "未来店",
   cancelled: "キャンセル",
 };
 const STATUS_BADGE = {
   pending_review: "badge badge-manual",
   confirmed: "badge badge-confirmed",
+  visited: "badge badge-confirmed",
+  no_show: "badge badge-cancelled",
   cancelled: "badge badge-cancelled",
 };
 
@@ -65,7 +69,7 @@ export default function AdminReservationsPage() {
       </div>
 
       <div className="flex gap-2 text-xs">
-        {["all", "pending_review", "confirmed", "cancelled"].map((s) => (
+        {["all", "pending_review", "confirmed", "visited", "no_show", "cancelled"].map((s) => (
           <button
             key={s}
             onClick={() => setFilter(s)}
@@ -151,7 +155,23 @@ export default function AdminReservationsPage() {
                         onClick={() => updateStatus(r.id, "confirmed")}
                         className="text-xs rounded-full bg-emerald-600 text-white px-4 py-1.5 hover:opacity-90"
                       >
-                        確定する
+                        {r.status === "visited" || r.status === "no_show" ? "確定に戻す" : "確定する"}
+                      </button>
+                    )}
+                    {(r.status === "confirmed" || r.status === "no_show") && (
+                      <button
+                        onClick={() => updateStatus(r.id, "visited")}
+                        className="text-xs rounded-full bg-sky-600 text-white px-4 py-1.5 hover:opacity-90"
+                      >
+                        来店済みにする
+                      </button>
+                    )}
+                    {(r.status === "confirmed" || r.status === "visited") && (
+                      <button
+                        onClick={() => updateStatus(r.id, "no_show")}
+                        className="text-xs rounded-full border border-black/20 px-4 py-1.5 hover:bg-black/5"
+                      >
+                        未来店にする
                       </button>
                     )}
                     {r.status !== "pending_review" && (
