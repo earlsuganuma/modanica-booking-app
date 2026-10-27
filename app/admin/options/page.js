@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AdminNav from "../../../components/AdminNav";
+import { uploadImage } from "../../../lib/imageUpload";
 
 const UNIT_LABEL_PRESETS = ["個", "人", "枚", "セット", "束", "回"];
 
@@ -52,23 +53,14 @@ function OptionThumbnailManager({ option, onSaved }) {
     setError("");
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("kind", "options");
-      formData.append("id", option.id);
-      const uploadRes = await fetch("/api/admin/upload", { method: "POST", body: formData });
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) {
-        setError(uploadData.message || "アップロードに失敗しました。");
-        setUploading(false);
-        return;
-      }
+      const url = await uploadImage(file, "options", option.id);
       const previousUrl = option.imageUrl;
-      await fetch(`/api/admin/options/${option.id}`, {
+      const patchRes = await fetch(`/api/admin/options/${option.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl: uploadData.url }),
+        body: JSON.stringify({ imageUrl: url }),
       });
+      if (!patchRes.ok) throw new Error("画像の登録（保存）に失敗しました。もう一度お試しください。");
       if (previousUrl) {
         await fetch("/api/admin/upload", {
           method: "DELETE",
@@ -77,6 +69,8 @@ function OptionThumbnailManager({ option, onSaved }) {
         });
       }
       await onSaved();
+    } catch (err) {
+      setError(err.message || "アップロードに失敗しました。");
     } finally {
       setUploading(false);
     }

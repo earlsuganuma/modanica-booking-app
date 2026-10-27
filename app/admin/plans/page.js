@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AdminNav from "../../../components/AdminNav";
+import { uploadImage } from "../../../lib/imageUpload";
 
 const CONFIRMATION_OPTIONS = [
   { value: "manual", label: "要確認（仮予約→運営者が確定）" },
@@ -40,24 +41,17 @@ function PlanImageManager({ plan, onSaved }) {
     setError("");
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("kind", "plans");
-      formData.append("id", plan.id);
-      const uploadRes = await fetch("/api/admin/upload", { method: "POST", body: formData });
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) {
-        setError(uploadData.message || "アップロードに失敗しました。");
-        setUploading(false);
-        return;
-      }
-      const nextImages = [...images, uploadData.url];
-      await fetch(`/api/admin/plans/${plan.id}`, {
+      const url = await uploadImage(file, "plans", plan.id);
+      const nextImages = [...images, url];
+      const patchRes = await fetch(`/api/admin/plans/${plan.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ images: nextImages }),
       });
+      if (!patchRes.ok) throw new Error("画像の登録（保存）に失敗しました。もう一度お試しください。");
       await onSaved();
+    } catch (err) {
+      setError(err.message || "アップロードに失敗しました。");
     } finally {
       setUploading(false);
     }

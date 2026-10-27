@@ -33,6 +33,8 @@ jobs:
       - name: Sync files to VPS
         # uploads: 管理画面からアップロードしたプラン画像・オプション画像の保存先（publicフォルダの外）。
         # --deleteでVPS側の既存アップロード分が消えないよう除外している。
+        # 先頭の「/」が重要：プロジェクト直下の uploads/ だけを除外する。
+        # 「/」なしだと app/api/uploads（画像配信用のAPI）まで除外されてしまい、画像が表示されなくなる。
         run: |
           rsync -avz --delete \
             --exclude='.git' \
@@ -42,7 +44,7 @@ jobs:
             --exclude='.env.local' \
             --exclude='.env.local.example' \
             --exclude='data.json' \
-            --exclude='uploads' \
+            --exclude='/uploads' \
             -e "ssh -p ${{ secrets.VPS_PORT }} -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
             ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/home/earlclub/apps/modanica-booking-app/"
 
