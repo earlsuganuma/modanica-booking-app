@@ -22,13 +22,45 @@ export default function AdminReservationsPage() {
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
+  const [otaList, setOtaList] = useState([]);
+  const [otaEdit, setOtaEdit] = useState(null); // 編集中のOTA予約（フォームの値）
+  const [otaSaving, setOtaSaving] = useState(false);
+  const [otaError, setOtaError] = useState("");
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/admin/reservations", { cache: "no-store" });
+    const [res, ores] = await Promise.all([
+      fetch("/api/admin/reservations", { cache: "no-store" }),
+      fetch("/api/admin/ota-reservations", { cache: "no-store" }).catch(() => null),
+    ]);
     const data = await res.json();
     setReservations(data.reservations || []);
+    try {
+      const odata = ores && ores.ok ? await ores.json() : null;
+      setOtaList((odata && odata.reservations) || []);
+    } catch (e) {
+      setOtaList([]);
+    }
     setLoading(false);
+  }
+
+  async function saveOta(e) {
+    e.preventDefault();
+    setOtaError("");
+    setOtaSaving(true);
+    const res = await fetch("/api/admin/ota-reservations", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(otaEdit),
+    });
+    const d = await res.json().catch(() => ({}));
+    setOtaSaving(false);
+    if (!res.ok) {
+      setOtaError(d.message || "保存に失敗しました。");
+      return;
+    }
+    setOtaEdit(null);
+    load();
   }
 
   useEffect(() => {
@@ -49,7 +81,19 @@ export default function AdminReservationsPage() {
     load();
   }
 
-  const filtered = reservations.filter((r) => (filter === "all" ? true : r.status === filter));
+  // 自社の予約と、OTA（iCal取り込み）の予約を、登録・取り込みの新しい順に混ぜて表示する。
+  // OTAの行は読み取り専用（確定・キャンセルなどの操作はなく、メモなどの詳細だけ編集できる）。
+  const items = [
+    ...(filter === "all" || filter === "ota"
+      ? otaList.map((o) => ({ kind: "ota", key: `ota${o.id}`, sort: o.created_at || "", o }))
+      : []),
+    ...(filter === "ota"
+      ? []
+      : reservations
+          .filter((r) => (filter === "all" ? true : r.status === filter))
+          .map((r) => ({ kind: "res", key: `r${r.id}`, sort: r.created_at || "", r }))),
+  ].sort((a, b) => String(b.sort).localeCompare(String(a.sort)));
+  const filtered = items;
 
   return (
     <div className="space-y-6">
@@ -74,7 +118,7 @@ export default function AdminReservationsPage() {
       </div>
 
       <div className="flex gap-2 text-xs">
-        {["all", "pending_review", "confirmed", "visited", "no_show", "cancelled"].map((s) => (
+        {["all", "pending_review", "confirmed", "visited", "no_show", "cancelled", "ota"].map((s) => (
           <button
             key={s}
             onClick={() => setFilter(s)}
@@ -82,7 +126,7 @@ export default function AdminReservationsPage() {
               filter === s ? "bg-ink text-white border-ink" : "border-black/20 text-black/50"
             }`}
           >
-            {s === "all" ? "すべて" : STATUS_LABEL[s]}
+            {s === "all" ? "すべて" : s === "ota" ? "OTA予約" : STATUS_LABEL[s]}
           </button>
         ))}
       </div>
@@ -93,8 +137,51 @@ export default function AdminReservationsPage() {
         <p className="text-sm text-black/40">予約はまだありません。</p>
       ) : (
         <div className="space-y-3">
-          {filtered.map((r) => (
-            <div key={r.id} className="rounded-2xl bg-white p-4 shadow-sm">
+          {filtered.map((item) => {
+            if (item.kind === "ota") {
+              const o = item.o;
+              return (
+                <div key={item.key} className="rounded-2xl bg-white p-4 shadow-sm" style={{ borderLeft: "5px solid #eab308" }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="badge" style={{ background: "#fef9c3", color: "#854d0e" }}>{o.channel_label}</span>{" "}
+                      <span className="font-bold">{o.room_label}</span>{" "}
+                      <span className="text-xs text-black/40">OTA予約（読み取り専用）</span>
+                    </div>
+                    <div className="text-sm text-black/50">
+                      {o.start_date} IN 〜 {o.end_date} OUT（{o.nights}泊）
+                    </div>
+                  </div>
+                  <div className="mt-2 grid sm:grid-cols-3 gap-2 text-sm text-black/60">
+                    <div>お客様：{o.guest_name || "（未入力）"}{o.guest_count != null ? `（${o.guest_count}名）` : ""}</div>
+                    <div>金額：{o.total_price != null ? `¥${Number(o.total_price).toLocaleString()}` : "（未入力）"}</div>
+                    <div className="text-xs text-black/40 truncate">OTA表示：{o.summary || "-"}</div>
+                  </div>
+                  {o.memo && <div className="mt-1 text-xs text-black/40 whitespace-pre-wrap">メモ：{o.memo}</div>}
+                  <div className="mt-3">
+                    <button
+                      onClick={() => {
+                        setOtaError("");
+                        setOtaEdit({
+                          id: o.id,
+                          title: `${o.channel_label} ${o.room_label} ${o.start_date}〜${o.end_date}`,
+                          guestName: o.guest_name || "",
+                          guestCount: o.guest_count ?? "",
+                          totalPrice: o.total_price ?? "",
+                          memo: o.memo || "",
+                        });
+                      }}
+                      className="text-xs rounded-full border border-black/20 px-4 py-1.5 hover:bg-black/5"
+                    >
+                      詳細・メモを編集
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            const r = item.r;
+            return (
+            <div key={item.key} className="rounded-2xl bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <a href={`/admin/reservations/${r.id}`} className="font-mono text-xs text-black/40 hover:underline">
@@ -198,7 +285,51 @@ export default function AdminReservationsPage() {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
+        </div>
+      )}
+
+      {otaEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <form onSubmit={saveOta} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl space-y-3 text-sm">
+            <div className="font-bold">OTA予約の詳細</div>
+            <div className="text-xs text-black/50">{otaEdit.title}</div>
+            <p className="text-xs text-black/40">
+              OTAのカレンダーには日程と部屋しか入っていないため、お客様名などは手で入力します（任意）。入力すると、Googleカレンダーの予定にも反映されます。
+            </p>
+            <label className="block">
+              <span className="text-xs text-black/50">お客様名</span>
+              <input value={otaEdit.guestName} onChange={(e) => setOtaEdit({ ...otaEdit, guestName: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+            </label>
+            <div className="flex gap-3">
+              <label className="block flex-1">
+                <span className="text-xs text-black/50">人数</span>
+                <input type="number" min="0" value={otaEdit.guestCount} onChange={(e) => setOtaEdit({ ...otaEdit, guestCount: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+              </label>
+              <label className="block flex-1">
+                <span className="text-xs text-black/50">金額（円）</span>
+                <input type="number" min="0" value={otaEdit.totalPrice} onChange={(e) => setOtaEdit({ ...otaEdit, totalPrice: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+              </label>
+            </div>
+            <label className="block">
+              <span className="text-xs text-black/50">メモ</span>
+              <textarea rows={3} value={otaEdit.memo} onChange={(e) => setOtaEdit({ ...otaEdit, memo: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+            </label>
+            {otaError && <p className="text-xs text-red-600">{otaError}</p>}
+            <div className="flex gap-2">
+              <button type="submit" disabled={otaSaving} className="text-xs rounded-full bg-ink text-white px-5 py-2 hover:opacity-90 disabled:opacity-50">
+                {otaSaving ? "保存中…" : "保存する"}
+              </button>
+              <button type="button" onClick={() => setOtaEdit(null)} className="text-xs rounded-full border border-black/20 px-5 py-2 hover:bg-black/5">
+                閉じる
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

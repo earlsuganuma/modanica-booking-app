@@ -9,6 +9,7 @@ const {
   runIcalSync,
 } = require("../../../../lib/icalSync");
 const { todayStr } = require("../../../../lib/dateUtil");
+const { syncOtaBlocks } = require("../../../../lib/googleCalendar");
 const { addDays } = require("../../../../lib/ical");
 
 export const dynamic = "force-dynamic";
@@ -75,6 +76,7 @@ export async function POST(request) {
   if (body.action === "sync") {
     try {
       const result = await runIcalSync({ notify: true });
+      await syncOtaBlocks();
       return NextResponse.json({ ok: true, result, ...(await state(request)) });
     } catch (e) {
       console.error("ical sync (admin) failed:", e);

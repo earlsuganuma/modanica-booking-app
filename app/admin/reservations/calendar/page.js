@@ -134,8 +134,8 @@ export default function AdminReservationsCalendarPage() {
         const chName = (id) => ((odata.channels || []).find((c) => c.id === id) || { label: id }).label;
         otaList = (odata.blocks || []).map((b) => ({
           id: `ota${b.id}`,
-          title: `${chName(b.channel)}：${roomName(b.resourceId)}`,
-          note: b.summary || "",
+          title: `${chName(b.channel)}：${roomName(b.resourceId)}${b.guestName ? ` ${b.guestName}` : ""}`,
+          note: [b.guestCount != null ? `${b.guestCount}名` : "", b.totalPrice != null ? `¥${Number(b.totalPrice).toLocaleString()}` : "", b.memo || b.summary || ""].filter(Boolean).join(" ／ "),
           startDatetime: `${b.startDate}T00:00`,
           endDatetime: `${b.endDate}T00:00`,
           planIds: [],
