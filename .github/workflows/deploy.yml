@@ -36,7 +36,7 @@ jobs:
         run: |
           ssh -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "mkdir -p ~/backups && cd /home/earlclub/apps/modanica-booking-app && tar czf ~/backups/app-\$(date +%Y%m%d-%H%M%S).tgz --exclude=node_modules --exclude=.next --exclude=./uploads --exclude=data.json . && ls -1t ~/backups/app-*.tgz | tail -n +11 | xargs -r rm -f"
+            "mkdir -p ~/app-backups && cd /home/earlclub/apps/modanica-booking-app && tar czf ~/app-backups/app-\$(date +%Y%m%d-%H%M%S).tgz --exclude=node_modules --exclude=.next --exclude=./uploads --exclude=data.json . && ls -1t ~/app-backups/app-*.tgz | tail -n +11 | xargs -r rm -f"
 
       - name: List files that exist only on the VPS (will be deleted by sync)
         # 参考表示。GitHubに無いのにVPSにあるファイル＝次の同期で削除されるファイルを、ログに出す。
