@@ -30,6 +30,23 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "${{ secrets.VPS_PORT }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
+      - name: Backup current VPS app (safety net)
+        # 同期の前に、VPS上の現在のアプリ（node_modules・.next・uploads・data.json以外）を丸ごと保存する。
+        # VPSに直接置かれたファイルが同期（--delete）で消えても、ここから復元できる。直近10世代を残す。
+        run: |
+          ssh -p "${{ secrets.VPS_PORT }}" -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "mkdir -p ~/backups && cd /home/earlclub/apps/modanica-booking-app && tar czf ~/backups/app-\$(date +%Y%m%d-%H%M%S).tgz --exclude=node_modules --exclude=.next --exclude=./uploads --exclude=data.json . && ls -1t ~/backups/app-*.tgz | tail -n +11 | xargs -r rm -f"
+
+      - name: List files that exist only on the VPS (will be deleted by sync)
+        # 参考表示。GitHubに無いのにVPSにあるファイル＝次の同期で削除されるファイルを、ログに出す。
+        run: |
+          rsync -avzn --delete \
+            --exclude='.git' --exclude='.github' --exclude='node_modules' --exclude='.next' \
+            --exclude='.env.local' --exclude='.env.local.example' --exclude='data.json' --exclude='/uploads' \
+            -e "ssh -p ${{ secrets.VPS_PORT }} -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            ./ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/home/earlclub/apps/modanica-booking-app/" | grep '^deleting' || echo "(削除されるファイルはありません)"
+
       - name: Sync files to VPS
         # uploads: 管理画面からアップロードしたプラン画像・オプション画像の保存先（publicフォルダの外）。
         # --deleteでVPS側の既存アップロード分が消えないよう除外している。

@@ -3,6 +3,7 @@ const { load, save } = require("../../../lib/store");
 const { getPlan } = require("../../../lib/plans");
 const { resolveDatetime } = require("../../../lib/timeTemplates");
 const { hasConflict } = require("../../../lib/availability");
+const { commitWithConflictCheck } = require("../../../lib/reservationGuard");
 const { calcPrice, selectOptions } = require("../../../lib/pricing");
 const { getConfirmationMode, INQUIRY_ONLY_MESSAGE } = require("../../../lib/salesRules");
 const { validateFlexibleStart } = require("../../../lib/businessHours");
@@ -117,6 +118,8 @@ export async function POST(request) {
   let paymentAmount = null;
   let cardBrand = null;
   let cardLast4 = null;
+  // 保存直前の最終判定で枠が埋まっていた場合に、確保した与信を解放する処理（決済の種類ごとに下で設定）
+  let releasePayment = async () => {};
 
   // 決済不要のプラン（lib/paymentRules.js）は、決済情報が送られてきても無視して予約だけ作る。
   const needsPayment = price.total > 0 && requiresOnlinePayment(plan);
@@ -153,6 +156,7 @@ export async function POST(request) {
     }
     const pmInfo = await payjpV2.describePaymentMethod(flow, flowMethod);
     paymentStatus = flow.status === "succeeded" ? "captured" : "authorized";
+    releasePayment = () => payjpGateway.releaseOrRefundFlow(flow);
     payjpChargeId = flow.id;
     paymentAmount = flow.status === "succeeded" ? (flow.amount_received != null ? flow.amount_received : flow.amount) : flow.amount;
     cardBrand = pmInfo.brand;
@@ -185,6 +189,7 @@ export async function POST(request) {
         return NextResponse.json({ error: "amount_mismatch", message: "お支払い金額の確認に失敗しました。恐れ入りますが最初からやり直してください。" }, { status: 402 });
       }
       paymentStatus = "authorized";
+      releasePayment = () => payjpClient.refund(submittedChargeId);
       payjpChargeId = charge.id;
       paymentAmount = charge.amount;
       cardBrand = charge.card ? charge.card.brand : null;
@@ -224,9 +229,45 @@ export async function POST(request) {
     cardLast4,
     capturedAt: paymentStatus === "captured" ? new Date().toISOString() : null,
   };
-  data.reservations.push(reservation);
-  data.nextReservationId = id + 1;
-  await save(data);
+  // 最終の空き判定と保存を、ロックを取ったトランザクションの中で行う（同時に予約されても二重にならない）
+  let result;
+  try {
+    result = await commitWithConflictCheck({
+      check: { resourceIds, startDatetime: start, endDatetime: end, exclusivity: plan.exclusivity, planId: plan.id },
+      data,
+      precheck: async (client) => {
+        if (!payjpChargeId) return null;
+        const ex = await client.query("SELECT id, status FROM reservations WHERE payjp_charge_id = $1 LIMIT 1", [payjpChargeId]);
+        return ex.rows[0] || null;
+      },
+      write: async (client, ctx) => {
+        reservation.id = Math.max(ctx.nextReservationId, id);
+        data.reservations.push(reservation);
+        data.nextReservationId = reservation.id + 1;
+        await save(data, { client });
+      },
+    });
+  } catch (e) {
+    // 保存に失敗した場合も、確保した与信は解放する（お客様に請求が残らないように）
+    await releasePayment().catch(() => {});
+    throw e;
+  }
+  if (result.ok && result.reused) {
+    // 同じ決済で先に保存された予約がある（二重送信）：与信は解放せず、その予約を返す
+    return NextResponse.json({ reservationId: result.reused.id, price, status: result.reused.status, reused: true });
+  }
+  if (!result.ok) {
+    await releasePayment().catch(() => {});
+    // お客様には、他の予約の内容は表示しない
+    return NextResponse.json(
+      {
+        error: "conflict",
+        message: "申し訳ありません。お手続きの間に、この日程は他のご予約で埋まりました。お支払いは取り消しましたので、別の日程をご検討ください。",
+        conflictType: "hard",
+      },
+      { status: 409 }
+    );
+  }
 
   // 予約受付メール（お客様宛）＋ 新規予約通知（運営者宛・ADMIN_NOTIFY_EMAIL設定時のみ）
   await syncReservation(reservation, plan, data.options);
@@ -238,5 +279,5 @@ export async function POST(request) {
     await sendMail({ type: "admin_notify", to: ADMIN_NOTIFY_EMAIL, ...adminMail });
   }
 
-  return NextResponse.json({ reservationId: id, price, status: "pending_review" });
+  return NextResponse.json({ reservationId: reservation.id, price, status: "pending_review" });
 }

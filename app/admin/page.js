@@ -57,11 +57,16 @@ export default function AdminDashboardPage() {
   }, []);
 
   async function updateStatus(id, status) {
-    await fetch(`/api/admin/reservations/${id}`, {
+    const res = await fetch(`/api/admin/reservations/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
+    if (!res.ok) {
+      // 例：キャンセル済みの予約を戻そうとしたが、その日程が他の予約・OTAブロックで埋まっている
+      const data = await res.json().catch(() => ({}));
+      alert(data.message || "処理に失敗しました。");
+    }
     load();
   }
 

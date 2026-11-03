@@ -8,6 +8,7 @@ const { syncReservation } = require("../../../../lib/googleCalendar");
 const { getPlan } = require("../../../../lib/plans");
 const { resolveDatetime } = require("../../../../lib/timeTemplates");
 const { hasConflict } = require("../../../../lib/availability");
+const { commitWithConflictCheck, adminConflictMessage, describeConflicts } = require("../../../../lib/reservationGuard");
 const { calcPrice, selectOptions } = require("../../../../lib/pricing");
 const { validateFlexibleStart } = require("../../../../lib/businessHours");
 const { isStayPlan, resolveGuestBreakdown } = require("../../../../lib/lodging");
@@ -72,7 +73,7 @@ export async function POST(request) {
   const { start, end, nightDates } = resolveDatetime({ timeType: plan.time_type, date, slotId, startTime, nights, planId: plan.id });
   const resourceIds = plan.resources.map((r) => r.id);
 
-  const { conflict, adjustable } = await hasConflict({
+  const { conflict, adjustable, conflicts } = await hasConflict({
     resourceIds,
     startDatetime: start,
     endDatetime: end,
@@ -80,10 +81,10 @@ export async function POST(request) {
     planId: plan.id,
   });
   if (conflict) {
-    const message = adjustable
-      ? "この日程にはカフェ・飲食利用の予約が入っています。"
-      : "この日程はすでに他の予約で埋まっています。";
-    return NextResponse.json({ error: "conflict", message }, { status: 409 });
+    // 重なっている相手（予約番号・日程・部屋、OTAブロック、私用ブロック）を表示する
+    const lines = describeConflicts(conflicts, data);
+    const lead = adjustable ? "この日程にはカフェ・飲食利用の予約が入っています。" : "この日程は次の予約・ブロックと重なっているため、保存できません。";
+    return NextResponse.json({ error: "conflict", message: adminConflictMessage(lines, lead), conflicts: lines }, { status: 409 });
   }
 
   const selectedOptions = selectOptions(plan.options, optionIds, optionQuantities);
@@ -130,12 +131,26 @@ export async function POST(request) {
     cardBrand: null,
     cardLast4: null,
   };
-  data.reservations.push(reservation);
-  data.nextReservationId = id + 1;
-  await save(data);
+  // 空き判定と保存を、ロックを取ったトランザクションの中で行う（同時に操作されても二重にならない）
+  const result = await commitWithConflictCheck({
+    check: { resourceIds, startDatetime: start, endDatetime: end, exclusivity: plan.exclusivity, planId: plan.id },
+    data,
+    write: async (client, ctx) => {
+      reservation.id = Math.max(ctx.nextReservationId, id);
+      data.reservations.push(reservation);
+      data.nextReservationId = reservation.id + 1;
+      await save(data, { client });
+    },
+  });
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: "conflict", message: adminConflictMessage(result.conflict.lines), conflicts: result.conflict.lines },
+      { status: 409 }
+    );
+  }
   await syncReservation(reservation, plan, data.options);
 
-  return NextResponse.json({ reservationId: id, price: { ...price, total: totalPrice }, status });
+  return NextResponse.json({ reservationId: reservation.id, price: { ...price, total: totalPrice }, status });
 }
 
 // 管理画面専用の予約一覧API（middleware.jsにより /api/admin/* はログイン必須）。

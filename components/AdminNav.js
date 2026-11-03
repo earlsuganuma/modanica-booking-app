@@ -8,6 +8,7 @@ const links = [
   { href: "/admin/payouts", label: "入金予定" },
   { href: "/admin/plans", label: "プラン詳細編集" },
   { href: "/admin/calendar", label: "料金設定" },
+  { href: "/admin/ical", label: "OTA連携" },
   { href: "/admin/options", label: "オプション管理" },
   { href: "/admin/faqs", label: "Q&A管理" },
   { href: "/admin/mail-notes", label: "確定メール文面" },

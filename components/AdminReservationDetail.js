@@ -231,7 +231,7 @@ export default function AdminReservationDetail({ id }) {
           )}
 
           {actionError && (
-            <div className="text-sm text-red-700 bg-red-50 rounded-lg px-4 py-3">{actionError}</div>
+            <div className="text-sm text-red-700 bg-red-50 rounded-lg px-4 py-3 whitespace-pre-wrap">{actionError}</div>
           )}
 
           {editing && form ? (

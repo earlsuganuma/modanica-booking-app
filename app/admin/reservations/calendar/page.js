@@ -104,10 +104,11 @@ export default function AdminReservationsCalendarPage() {
 
   async function load() {
     setLoading(true);
-    const [res, bres, pres] = await Promise.all([
+    const [res, bres, pres, ores] = await Promise.all([
       fetch("/api/admin/reservations", { cache: "no-store" }),
       fetch("/api/admin/private-blocks", { cache: "no-store" }),
       fetch("/api/admin/plans", { cache: "no-store" }),
+      fetch("/api/admin/ical", { cache: "no-store" }).catch(() => null),
     ]);
     try {
       const pdata = await pres.json();
@@ -117,12 +118,34 @@ export default function AdminReservationsCalendarPage() {
     }
     const data = await res.json();
     setReservations(data.reservations || []);
+    let privateList = [];
     try {
       const bdata = await bres.json();
-      setBlocks(bdata.blocks || []);
+      privateList = bdata.blocks || [];
     } catch (e) {
-      setBlocks([]);
+      privateList = [];
     }
+    // OTA（Booking.com・Airbnb）から取り込んだ売り止め。泊（チェックイン日〜チェックアウト前日）として表示し、ここでは削除できない。
+    let otaList = [];
+    try {
+      const odata = ores && ores.ok ? await ores.json() : null;
+      if (odata) {
+        const roomName = (id) => ((odata.rooms || []).find((r) => r.resourceId === id) || { label: id }).label;
+        const chName = (id) => ((odata.channels || []).find((c) => c.id === id) || { label: id }).label;
+        otaList = (odata.blocks || []).map((b) => ({
+          id: `ota${b.id}`,
+          title: `${chName(b.channel)}：${roomName(b.resourceId)}`,
+          note: b.summary || "",
+          startDatetime: `${b.startDate}T00:00`,
+          endDatetime: `${b.endDate}T00:00`,
+          planIds: [],
+          ota: { room: roomName(b.resourceId), startDate: b.startDate, endDate: b.endDate },
+        }));
+      }
+    } catch (e) {
+      otaList = [];
+    }
+    setBlocks([...privateList, ...otaList]);
     setLoading(false);
   }
 
@@ -216,11 +239,16 @@ export default function AdminReservationsCalendarPage() {
   }, [blocks]);
 
   function blockScopeLabel(b) {
+    if (b.ota) return `${b.ota.room}（その部屋を使うプラン＝部屋のみ・貸切をすべて売り止め）`;
     if (!b.planIds || !b.planIds.length) return "全プラン";
     return b.planIds.map((id) => (allPlans.find((p) => p.id === id) || { name: id }).name).join("、");
   }
 
   function blockTimeLabel(b) {
+    if (b.ota) {
+      const n = Math.round((Date.parse(b.ota.endDate) - Date.parse(b.ota.startDate)) / 86400000);
+      return `${b.ota.startDate} IN 〜 ${b.ota.endDate} OUT（${n}泊）`;
+    }
     const allDay = b.startDatetime.slice(11, 16) === "00:00" && b.endDatetime.slice(11, 16) === "00:00";
     if (allDay) {
       const last = addDays(b.endDatetime.slice(0, 10), -1);
@@ -249,11 +277,16 @@ export default function AdminReservationsCalendarPage() {
   }
 
   async function updateStatus(id, status) {
-    await fetch(`/api/admin/reservations/${id}`, {
+    const res = await fetch(`/api/admin/reservations/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
+    if (!res.ok) {
+      // 例：キャンセル済みの予約を戻そうとしたが、その日程が他の予約・OTAブロックで埋まっている
+      const data = await res.json().catch(() => ({}));
+      alert(data.message || "処理に失敗しました。");
+    }
     load();
   }
 
@@ -607,18 +640,22 @@ export default function AdminReservationsCalendarPage() {
           <div key={`b${b.id}`} className="rounded-2xl bg-white p-4 shadow-sm" style={{ borderLeft: "5px solid #9ca3af" }}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <span className="text-xs rounded-full px-2 py-0.5" style={{ background: "#e5e7eb", color: "#374151" }}>私用・予約不可</span>{" "}
+                <span className="text-xs rounded-full px-2 py-0.5" style={{ background: "#e5e7eb", color: "#374151" }}>{b.ota ? "OTA予約（売り止め）" : "私用・予約不可"}</span>{" "}
                 <span className="font-bold">{b.title}</span>
               </div>
               <div className="text-sm text-black/50">{blockTimeLabel(b)}</div>
             </div>
             <div className="mt-1 text-xs text-black/50">対象：{blockScopeLabel(b)}</div>
             {b.note && <div className="mt-1 text-xs text-black/40 whitespace-pre-wrap">{b.note}</div>}
-            <div className="mt-3">
-              <button onClick={() => removeBlock(b.id)} className="text-xs rounded-full border border-red-300 text-red-600 px-4 py-1.5 hover:bg-red-50">
-                削除
-              </button>
-            </div>
+            {b.ota ? (
+              <div className="mt-2 text-[11px] text-black/40">OTA側でキャンセルされると自動で解除されます（設定は「OTA連携」）。</div>
+            ) : (
+              <div className="mt-3">
+                <button onClick={() => removeBlock(b.id)} className="text-xs rounded-full border border-red-300 text-red-600 px-4 py-1.5 hover:bg-red-50">
+                  削除
+                </button>
+              </div>
+            )}
           </div>
         ))}
         {selectedEntries.length === 0 ? (

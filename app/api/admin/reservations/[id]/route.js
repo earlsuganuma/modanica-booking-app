@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 const { load, save } = require("../../../../../lib/store");
+const { commitWithConflictCheck, adminConflictMessage } = require("../../../../../lib/reservationGuard");
 const { sendMail } = require("../../../../../lib/mailer");
 const { reservationConfirmed, reservationCancelled } = require("../../../../../lib/emailTemplates");
 const { computeAtRisk } = require("../../../../../lib/priorityRisk");
@@ -247,8 +248,39 @@ export async function PATCH(request, { params }) {
         // amountToRefund が 0（当日キャンセル等でキャンセル料が全額のケース）の場合は返金なし・paymentStatusは captured のまま。
       }
     }
-    r.status = status;
-    await save(data);
+    if (previousStatus === "cancelled") {
+      // キャンセル済みの予約を有効なステータスへ戻す：その枠が今も空いているか（他の予約・貸切・私用ブロック・
+      // OTAブロック）を、新規予約と同じ判定でトランザクションの中で確かめてから保存する。自分自身は除外する。
+      const plan = data.plans.find((p) => p.id === r.planId);
+      const result = await commitWithConflictCheck({
+        check: {
+          resourceIds: r.resourceIds || [],
+          startDatetime: r.startDatetime,
+          endDatetime: r.endDatetime,
+          exclusivity: plan ? plan.exclusivity : "exclusive",
+          planId: r.planId,
+          excludeReservationId: r.id,
+        },
+        data,
+        write: async (client) => {
+          r.status = status;
+          await save(data, { client });
+        },
+      });
+      if (!result.ok) {
+        return NextResponse.json(
+          {
+            error: "conflict",
+            message: adminConflictMessage(result.conflict.lines, "この予約の日程は、次の予約・ブロックと重なっているため、元に戻せません。"),
+            conflicts: result.conflict.lines,
+          },
+          { status: 409 }
+        );
+      }
+    } else {
+      r.status = status;
+      await save(data);
+    }
   }
   await syncReservation(r, data.plans.find((p) => p.id === r.planId), data.options);
 

@@ -888,7 +888,7 @@ export default function ReserveForm({ plan, payjpV2: payjpV2Prop = false, payjpV
       )}
 
       {error && (
-        <div className="text-sm text-red-700 bg-red-50 rounded-lg px-4 py-3">
+        <div className="text-sm text-red-700 bg-red-50 rounded-lg px-4 py-3 whitespace-pre-wrap">
           {error === INQUIRY_ONLY_MESSAGE ? <InquiryNotice /> : error}
         </div>
       )}
