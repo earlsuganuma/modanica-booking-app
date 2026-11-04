@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 const { ROOMS, CHANNELS, listOtaBlocks, updateOtaBlockDetails, setOtaVisitStatus, channelLabel } = require("../../../../lib/otaBlocks");
 const { syncOtaBlocks } = require("../../../../lib/googleCalendar");
+const { entriesByBlock, allTelsAndDates, countPriorStays } = require("../../../../lib/guestRegistry");
+const { load } = require("../../../../lib/store");
 const { todayStr } = require("../../../../lib/dateUtil");
 const { addDays } = require("../../../../lib/ical");
 
@@ -12,9 +14,40 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   // 過去60日分から先を返す
   const blocks = await listOtaBlocks({ fromDate: addDays(todayStr(), -60) });
+  // 宿泊者名簿（/checkin の入力内容）とリピーター判定。名簿テーブルがまだ無い場合は、空として扱う。
+  const registry = await entriesByBlock(blocks.map((b) => b.id));
+  const registryRows = await allTelsAndDates();
+  let ownReservations = [];
+  try {
+    ownReservations = (await load()).reservations || [];
+  } catch (e) {
+    ownReservations = [];
+  }
   const list = blocks.map((b) => {
     const room = ROOMS.find((r) => r.resourceId === b.resourceId);
+    const entries = registry.get(b.id) || [];
+    // リピーター：名簿の電話番号が、過去の自社予約・過去のOTA名簿と一致する回数
+    const repeat = entries.reduce(
+      (max, e) => Math.max(max, countPriorStays({ tel: e.tel, checkIn: b.startDate, ownReservations, registryRows })),
+      0
+    );
     return {
+      registry: entries.map((e) => ({
+        id: e.id,
+        created_at: e.createdAt,
+        guest_name: e.guestName,
+        address: e.address,
+        tel: e.tel,
+        email: e.email,
+        guest_male: e.guestMale,
+        guest_female: e.guestFemale,
+        guest_children: e.guestChildren,
+        arrival_time: e.arrivalTime,
+        nationality: e.nationality,
+        passport_no: e.passportNo,
+        note: e.note,
+      })),
+      repeat_count: repeat,
       id: b.id,
       channel: b.channel,
       channel_label: channelLabel(b.channel),

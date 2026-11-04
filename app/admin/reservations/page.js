@@ -30,15 +30,24 @@ export default function AdminReservationsPage() {
   const [otaEdit, setOtaEdit] = useState(null); // 編集中のOTA予約（フォームの値）
   const [otaSaving, setOtaSaving] = useState(false);
   const [otaError, setOtaError] = useState("");
+  const [regPending, setRegPending] = useState([]); // 紐づけ待ちの宿泊者名簿
+  const [regView, setRegView] = useState(null); // 名簿を表示中のOTA予約
 
   async function load() {
     setLoading(true);
-    const [res, ores] = await Promise.all([
+    const [res, ores, pres] = await Promise.all([
       fetch("/api/admin/reservations", { cache: "no-store" }),
       fetch("/api/admin/ota-reservations", { cache: "no-store" }).catch(() => null),
+      fetch("/api/admin/guest-registry", { cache: "no-store" }).catch(() => null),
     ]);
     const data = await res.json();
     setReservations(data.reservations || []);
+    try {
+      const pdata = pres && pres.ok ? await pres.json() : null;
+      setRegPending((pdata && pdata.pending) || []);
+    } catch (e) {
+      setRegPending([]);
+    }
     try {
       const odata = ores && ores.ok ? await ores.json() : null;
       setOtaList((odata && odata.reservations) || []);
@@ -70,6 +79,20 @@ export default function AdminReservationsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  // 紐づけ待ちの名簿：OTA予約に紐づける／削除する
+  async function regAction(id, payload) {
+    const res = await fetch("/api/admin/guest-registry", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...payload }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.message || "処理に失敗しました。");
+    }
+    load();
+  }
 
   // OTA予約の来店記録：visited（来店済み）／ no_show（未来店）／ ""（元に戻す）
   async function setOtaVisit(id, visitStatus) {
@@ -140,9 +163,56 @@ export default function AdminReservationsPage() {
           >
             宿泊者名簿をCSV出力
           </a>
+          <a
+            href="/admin/checkin-qr"
+            className="text-xs rounded-full border border-black/20 px-3 py-1.5 hover:bg-black/5"
+          >
+            名簿フォームのQR・URL
+          </a>
           <button onClick={load} className="text-xs underline text-black/40">再読み込み</button>
         </div>
       </div>
+
+      {regPending.length > 0 && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 space-y-3">
+          <div className="font-bold text-sm text-amber-900">紐づけ待ちの宿泊者名簿（{regPending.length}件）</div>
+          <p className="text-xs text-amber-900/70">
+            OTA予約を1件に絞れなかった名簿です。該当するOTA予約を選んでください（OTA予約が届いていない場合は、届くと自動で紐づきます）。
+          </p>
+          {regPending.map((p) => (
+            <div key={p.id} className="rounded-xl bg-white p-3 text-sm space-y-2">
+              <div>
+                <span className="font-bold">{p.guest_name}</span>
+                <span className="text-black/50">
+                  {" "}
+                  チェックイン {p.check_in}／{p.total_guests}名（男{p.guest_male}・女{p.guest_female}・子{p.guest_children}）／{p.tel}
+                  {p.booking_ref ? `／予約番号 ${p.booking_ref}` : ""}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                {p.candidates.length === 0 && <span className="text-xs text-black/40">同じ日のOTA予約は、まだありません。</span>}
+                {p.candidates.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => regAction(p.id, { blockId: c.id })}
+                    className="text-xs rounded-full bg-sky-600 text-white px-3 py-1.5 hover:opacity-90"
+                  >
+                    {c.label} に紐づける
+                  </button>
+                ))}
+                <button
+                  onClick={() => {
+                    if (confirm("この名簿を削除します。よろしいですか？")) regAction(p.id, { action: "delete" });
+                  }}
+                  className="text-xs rounded-full border border-red-300 text-red-600 px-3 py-1.5 hover:bg-red-50"
+                >
+                  削除
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 text-xs">
         {["upcoming", "all", "pending_review", "confirmed", "visited", "no_show", "cancelled", "ota"].map((s) => (
@@ -175,6 +245,20 @@ export default function AdminReservationsPage() {
                     <div>
                       <span className="badge" style={{ background: "#fef9c3", color: "#854d0e" }}>{o.channel_label}</span>{" "}
                       <span className="font-bold">{o.room_label}</span>{" "}
+                      {(o.registry || []).length > 0 ? (
+                        <span className="badge badge-confirmed">名簿入力済み</span>
+                      ) : (
+                        <span className="badge" style={{ background: "#f3f4f6", color: "#6b7280" }}>名簿未入力</span>
+                      )}{" "}
+                      {o.repeat_count > 0 && (
+                        <span
+                          className="badge"
+                          style={{ background: "#fce7f3", color: "#9d174d" }}
+                          title="名簿の電話番号が、過去の予約・名簿と一致しています"
+                        >
+                          リピーター（過去{o.repeat_count}回）
+                        </span>
+                      )}{" "}
                       {o.visit_status === "visited" && <span className={STATUS_BADGE.visited}>{STATUS_LABEL.visited}</span>}
                       {o.visit_status === "no_show" && <span className={STATUS_BADGE.no_show}>{STATUS_LABEL.no_show}</span>}{" "}
                       <span className="text-xs text-black/40">OTA予約（日程はOTA側で管理）</span>
@@ -215,6 +299,14 @@ export default function AdminReservationsPage() {
                         className="text-xs rounded-full border border-black/20 px-4 py-1.5 hover:bg-black/5"
                       >
                         来店前に戻す
+                      </button>
+                    )}
+                    {(o.registry || []).length > 0 && (
+                      <button
+                        onClick={() => setRegView(o)}
+                        className="text-xs rounded-full border border-emerald-300 text-emerald-700 px-4 py-1.5 hover:bg-emerald-50"
+                      >
+                        名簿を見る
                       </button>
                     )}
                     {o.channel === "booking" && o.booking_ref && (
@@ -356,6 +448,47 @@ export default function AdminReservationsPage() {
             </div>
             );
           })}
+        </div>
+      )}
+
+      {regView && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-xl space-y-4 text-sm">
+            <div className="font-bold">宿泊者名簿</div>
+            <div className="text-xs text-black/50">
+              {regView.channel_label} {regView.room_label} {regView.start_date}〜{regView.end_date}
+            </div>
+            {regView.registry.map((e) => (
+              <div key={e.id} className="rounded-xl border border-black/10 p-3 space-y-1">
+                <div className="font-bold">{e.guest_name}</div>
+                <div>ご住所：{e.address}</div>
+                <div>電話：{e.tel}{e.email ? `／${e.email}` : ""}</div>
+                <div>人数：男{e.guest_male}・女{e.guest_female}・子供{e.guest_children}（計{e.guest_male + e.guest_female + e.guest_children}名）</div>
+                {e.arrival_time && <div>到着予定：{e.arrival_time}</div>}
+                {e.nationality && e.nationality !== "日本" && (
+                  <div>国籍：{e.nationality}／旅券番号：{e.passport_no}</div>
+                )}
+                {e.note && <div className="whitespace-pre-wrap text-black/60">備考：{e.note}</div>}
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-xs text-black/40">入力日時：{new Date(e.created_at).toLocaleString("ja-JP")}</span>
+                  <button
+                    onClick={() => {
+                      if (confirm("この名簿の紐づけを外します（名簿は「紐づけ待ち」に戻ります）。よろしいですか？")) {
+                        setRegView(null);
+                        regAction(e.id, { action: "unlink" });
+                      }
+                    }}
+                    className="text-xs underline text-black/40"
+                  >
+                    紐づけを外す
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button onClick={() => setRegView(null)} className="text-xs rounded-full border border-black/20 px-5 py-2 hover:bg-black/5">
+              閉じる
+            </button>
+          </div>
         </div>
       )}
 

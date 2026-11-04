@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 const { runIcalSync } = require("../../../../lib/icalSync");
 const { syncOtaBlocks } = require("../../../../lib/googleCalendar");
 const { ingestOtaMail } = require("../../../../lib/otaMail");
+const { relinkPending } = require("../../../../lib/guestRegistry");
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +25,19 @@ export async function POST(request) {
     } catch (e) {
       console.error("otaMail failed:", e);
     }
+    // 紐づけ待ちの宿泊者名簿を、もう一度OTA予約に紐づけてみる（OTAの予約が後から届いた場合）
+    let registry = { linked: 0 };
+    try {
+      registry = await relinkPending();
+    } catch (e) {
+      console.error("guest registry relink failed:", e);
+    }
     // 取り込んだOTA予約を、Googleカレンダーにも反映する（未設定なら何もしない。失敗しても取り込みの結果は返す）
     const gcal = await syncOtaBlocks();
     return NextResponse.json({
       ok: true,
       otaMail,
+      registryLinked: registry.linked,
       skipped: result.skipped || null,
       feeds: result.feeds,
       mail: result.mail ? result.mail.status : null,
