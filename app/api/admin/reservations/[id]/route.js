@@ -11,6 +11,7 @@ const { isStayPlan, includesMaleGuests } = require("../../../../../lib/lodging")
 const { getPlan } = require("../../../../../lib/plans");
 const { syncReservation } = require("../../../../../lib/googleCalendar");
 const { refundAmount: calcRefundAmount } = require("../../../../../lib/cancellationPolicy");
+const { lodgingTaxForReservation, lodgingTaxLine } = require("../../../../../lib/lodgingTax");
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,14 @@ export async function GET(request, { params }) {
       note: r.note,
       status: r.status,
       total_price: r.totalPrice,
+      // 長野県宿泊税の目安（現地払い。決済額には含まない）。宿泊プール以外は空文字
+      lodging_tax_line: (() => {
+        try {
+          return plan ? lodgingTaxLine(lodgingTaxForReservation(r, plan, data.priceRules)) : "";
+        } catch (e) {
+          return "";
+        }
+      })(),
       created_at: r.createdAt,
       at_risk: r.status !== "cancelled" ? computeAtRisk(data, r) : false,
       payment_status: r.paymentStatus || "none",
@@ -291,7 +300,7 @@ export async function PATCH(request, { params }) {
     // 来店済み／未来店から「確定」へ戻す操作では、確定メールを再送しない。
     if (status === "confirmed" && previousStatus !== "visited" && previousStatus !== "no_show") {
       const extraNote = await getConfirmedNote(r.planId);
-      const mail = reservationConfirmed(r, plan, extraNote, data.options);
+      const mail = reservationConfirmed(r, plan, extraNote, data.options, data.priceRules);
       await sendMail({ type: "reservation_confirmed", to: r.customerEmail, ...mail });
     } else if (status === "cancelled") {
       const mail = reservationCancelled(r, plan, { refundedAmount: r.refundedAmount || 0 }, data.options);

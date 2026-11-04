@@ -662,6 +662,9 @@ export default function ReserveForm({ plan, payjpV2: payjpV2Prop = false, payjpV
                       .join("、")}
                   </span>
                 )}
+                {availability.price.lodgingTaxLine && (
+                  <span className="block text-xs mt-1 text-emerald-700">{availability.price.lodgingTaxLine}</span>
+                )}
                 {availability.price.appliedRules?.some((r) => r.length > 0) && (
                   <span className="block text-xs mt-1 text-emerald-700">
                     適用ルール：{[...new Set(availability.price.appliedRules.flat())].join("、")}

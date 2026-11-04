@@ -192,6 +192,9 @@ export default function AdminReservationDetail({ id }) {
             <div className="space-y-1">
               <div className="text-black/40 text-xs">金額</div>
               <div className="font-bold">¥{reservation.total_price.toLocaleString()}</div>
+              {reservation.lodging_tax_line && (
+                <div className="text-xs text-black/50">{reservation.lodging_tax_line}</div>
+              )}
             </div>
             <div className="space-y-1">
               <div className="text-black/40 text-xs">決済状況</div>
