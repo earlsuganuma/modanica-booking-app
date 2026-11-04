@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import AdminNav from "../../../components/AdminNav";
 
+// Booking.com の施設ID（管理画面の施設名の横に表示されている番号）。予約詳細ページへのリンクに使う。
+const BOOKING_HOTEL_ID = "17571035";
+
 const STATUS_LABEL = {
   pending_review: "要確認",
   confirmed: "確定",
@@ -213,6 +216,16 @@ export default function AdminReservationsPage() {
                       >
                         来店前に戻す
                       </button>
+                    )}
+                    {o.channel === "booking" && o.booking_ref && (
+                      <a
+                        href={`https://admin.booking.com/hotel/hoteladmin/extranet_ng/manage/booking.html?res_id=${encodeURIComponent(o.booking_ref)}&hotel_id=${BOOKING_HOTEL_ID}&lang=ja`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs rounded-full border border-sky-300 text-sky-700 px-4 py-1.5 hover:bg-sky-50"
+                      >
+                        Booking.comで詳細を開く
+                      </a>
                     )}
                     <button
                       onClick={() => {

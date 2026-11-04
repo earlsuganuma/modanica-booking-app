@@ -12,6 +12,7 @@
 - Booking.comの通知メール（booking@modanica.net、さくらのIMAP・読み取り専用）から、予約番号・ゲスト名・ゲストからのメッセージを、OTA予約へ自動で入力（空欄のみ埋める。手入力は上書きしない）。要 npm パッケージ imapflow・mailparser と、環境変数 OTA_MAIL_IMAP_HOST / OTA_MAIL_USER / OTA_MAIL_PASSWORD。人数・金額は、通知メールに載っていないため手入力
 - OTA予約にも「来店済み／未来店／来店前に戻す」を追加（ota_blocks.visit_status。要 scripts/add-ota-visit-status.sql）
 - 予約一覧の既定表示を「来店前」（要確認・確定・来店記録のないOTA予約）に変更。来店済み・未来店・キャンセルは絞り込みで表示
+- OTA予約の編集に予約番号欄を追加。Booking.com予約には「Booking.comで詳細を開く」リンクを表示（新規予約メールには人数・金額が載らないため、手入力を補助）
 - バックアップの保存先を ~/app-backups に変更（~/backups は権限エラーのため）
 
 ## 0.3.0 — 2026-11
