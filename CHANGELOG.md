@@ -4,12 +4,14 @@
 - 唯一の正（Single Source of Truth）は GitHub の `main`。VPSのファイルを直接編集・追加しない（次のデプロイで消えます）。
 - 作業の開始前に必ず最新を取得する（`git pull`）。別のタスク・別のMacで作業した内容は、必ずGitHubへ push してから次の作業を始める。
 - 機能追加ごとにコミットし、この履歴に1行追記する。リリース時は `git tag vX.Y.Z` を付けて push する。
-- デプロイ前に VPS のアプリが `~/backups/` に自動保存される（直近10世代）。
+- デプロイ前に VPS のアプリが `~/app-backups/` に自動保存される（直近10世代）。
 
 ## [Unreleased]
 - OTA予約を、予約一覧に読み取り専用の行として表示（「OTA予約」フィルタ付き）。お客様名・人数・金額・メモを手入力で補える（ota_blocks に列を追加：scripts/add-ota-details.sql）
 - OTA予約を、Googleカレンダー（MODANICA予約）にも反映（変更分だけ更新、OTA側で消えたら予定も削除）
 - Booking.comの通知メール（booking@modanica.net、さくらのIMAP・読み取り専用）から、予約番号・ゲスト名・ゲストからのメッセージを、OTA予約へ自動で入力（空欄のみ埋める。手入力は上書きしない）。要 npm パッケージ imapflow・mailparser と、環境変数 OTA_MAIL_IMAP_HOST / OTA_MAIL_USER / OTA_MAIL_PASSWORD。人数・金額は、通知メールに載っていないため手入力
+- OTA予約にも「来店済み／未来店／来店前に戻す」を追加（ota_blocks.visit_status。要 scripts/add-ota-visit-status.sql）
+- 予約一覧の既定表示を「来店前」（要確認・確定・来店記録のないOTA予約）に変更。来店済み・未来店・キャンセルは絞り込みで表示
 - バックアップの保存先を ~/app-backups に変更（~/backups は権限エラーのため）
 
 ## 0.3.0 — 2026-11

@@ -21,7 +21,8 @@ const STATUS_BADGE = {
 export default function AdminReservationsPage() {
   const [reservations, setReservations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
+  // 既定は「来店前」（要確認・確定・来店記録のないOTA予約）。来店済み・未来店・キャンセルは外す。
+  const [filter, setFilter] = useState("upcoming");
   const [otaList, setOtaList] = useState([]);
   const [otaEdit, setOtaEdit] = useState(null); // 編集中のOTA予約（フォームの値）
   const [otaSaving, setOtaSaving] = useState(false);
@@ -67,6 +68,20 @@ export default function AdminReservationsPage() {
     load();
   }, []);
 
+  // OTA予約の来店記録：visited（来店済み）／ no_show（未来店）／ ""（元に戻す）
+  async function setOtaVisit(id, visitStatus) {
+    const res = await fetch("/api/admin/ota-reservations", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action: "visit_status", visitStatus }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.message || "処理に失敗しました。");
+    }
+    load();
+  }
+
   async function updateStatus(id, status) {
     const res = await fetch(`/api/admin/reservations/${id}`, {
       method: "PATCH",
@@ -83,15 +98,24 @@ export default function AdminReservationsPage() {
 
   // 自社の予約と、OTA（iCal取り込み）の予約を、登録・取り込みの新しい順に混ぜて表示する。
   // OTAの行は読み取り専用（確定・キャンセルなどの操作はなく、メモなどの詳細だけ編集できる）。
+  const otaVisible = (o) => {
+    const v = o.visit_status || "";
+    if (filter === "all" || filter === "ota") return true;
+    if (filter === "upcoming") return v === "";
+    if (filter === "visited") return v === "visited";
+    if (filter === "no_show") return v === "no_show";
+    return false; // 要確認・確定・キャンセルは自社予約の状態なので、OTA予約は出さない
+  };
+  const resVisible = (r) => {
+    if (filter === "all") return true;
+    if (filter === "upcoming") return r.status === "pending_review" || r.status === "confirmed";
+    return r.status === filter;
+  };
   const items = [
-    ...(filter === "all" || filter === "ota"
-      ? otaList.map((o) => ({ kind: "ota", key: `ota${o.id}`, sort: o.created_at || "", o }))
-      : []),
+    ...otaList.filter(otaVisible).map((o) => ({ kind: "ota", key: `ota${o.id}`, sort: o.created_at || "", o })),
     ...(filter === "ota"
       ? []
-      : reservations
-          .filter((r) => (filter === "all" ? true : r.status === filter))
-          .map((r) => ({ kind: "res", key: `r${r.id}`, sort: r.created_at || "", r }))),
+      : reservations.filter(resVisible).map((r) => ({ kind: "res", key: `r${r.id}`, sort: r.created_at || "", r }))),
   ].sort((a, b) => String(b.sort).localeCompare(String(a.sort)));
   const filtered = items;
 
@@ -117,8 +141,8 @@ export default function AdminReservationsPage() {
         </div>
       </div>
 
-      <div className="flex gap-2 text-xs">
-        {["all", "pending_review", "confirmed", "visited", "no_show", "cancelled", "ota"].map((s) => (
+      <div className="flex flex-wrap gap-2 text-xs">
+        {["upcoming", "all", "pending_review", "confirmed", "visited", "no_show", "cancelled", "ota"].map((s) => (
           <button
             key={s}
             onClick={() => setFilter(s)}
@@ -126,7 +150,7 @@ export default function AdminReservationsPage() {
               filter === s ? "bg-ink text-white border-ink" : "border-black/20 text-black/50"
             }`}
           >
-            {s === "all" ? "すべて" : s === "ota" ? "OTA予約" : STATUS_LABEL[s]}
+            {s === "upcoming" ? "来店前" : s === "all" ? "すべて" : s === "ota" ? "OTA予約" : STATUS_LABEL[s]}
           </button>
         ))}
       </div>
@@ -134,7 +158,9 @@ export default function AdminReservationsPage() {
       {loading ? (
         <p className="text-sm text-black/40">読み込み中…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-black/40">予約はまだありません。</p>
+        <p className="text-sm text-black/40">
+          {filter === "upcoming" ? "来店前の予約はありません。（来店済み・キャンセルなどは、上の絞り込みで見られます）" : "予約はまだありません。"}
+        </p>
       ) : (
         <div className="space-y-3">
           {filtered.map((item) => {
@@ -146,7 +172,9 @@ export default function AdminReservationsPage() {
                     <div>
                       <span className="badge" style={{ background: "#fef9c3", color: "#854d0e" }}>{o.channel_label}</span>{" "}
                       <span className="font-bold">{o.room_label}</span>{" "}
-                      <span className="text-xs text-black/40">OTA予約（読み取り専用）</span>
+                      {o.visit_status === "visited" && <span className={STATUS_BADGE.visited}>{STATUS_LABEL.visited}</span>}
+                      {o.visit_status === "no_show" && <span className={STATUS_BADGE.no_show}>{STATUS_LABEL.no_show}</span>}{" "}
+                      <span className="text-xs text-black/40">OTA予約（日程はOTA側で管理）</span>
                     </div>
                     <div className="text-sm text-black/50">
                       {o.start_date} IN 〜 {o.end_date} OUT（{o.nights}泊）
@@ -158,7 +186,31 @@ export default function AdminReservationsPage() {
                     <div className="text-xs text-black/40 truncate">OTA表示：{o.summary || "-"}</div>
                   </div>
                   {o.memo && <div className="mt-1 text-xs text-black/40 whitespace-pre-wrap">メモ：{o.memo}</div>}
-                  <div className="mt-3">
+                  <div className="mt-3 flex flex-wrap gap-2 items-center">
+                    {o.visit_status !== "visited" && (
+                      <button
+                        onClick={() => setOtaVisit(o.id, "visited")}
+                        className="text-xs rounded-full bg-sky-600 text-white px-4 py-1.5 hover:opacity-90"
+                      >
+                        来店済みにする
+                      </button>
+                    )}
+                    {o.visit_status !== "no_show" && (
+                      <button
+                        onClick={() => setOtaVisit(o.id, "no_show")}
+                        className="text-xs rounded-full border border-black/20 px-4 py-1.5 hover:bg-black/5"
+                      >
+                        未来店にする
+                      </button>
+                    )}
+                    {o.visit_status && (
+                      <button
+                        onClick={() => setOtaVisit(o.id, "")}
+                        className="text-xs rounded-full border border-black/20 px-4 py-1.5 hover:bg-black/5"
+                      >
+                        来店前に戻す
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setOtaError("");

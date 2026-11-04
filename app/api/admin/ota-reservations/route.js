@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-const { ROOMS, CHANNELS, listOtaBlocks, updateOtaBlockDetails, channelLabel } = require("../../../../lib/otaBlocks");
+const { ROOMS, CHANNELS, listOtaBlocks, updateOtaBlockDetails, setOtaVisitStatus, channelLabel } = require("../../../../lib/otaBlocks");
 const { syncOtaBlocks } = require("../../../../lib/googleCalendar");
 const { todayStr } = require("../../../../lib/dateUtil");
 const { addDays } = require("../../../../lib/ical");
@@ -29,6 +29,7 @@ export async function GET() {
       total_price: b.totalPrice,
       memo: b.memo,
       booking_ref: b.bookingRef,
+      visit_status: b.visitStatus,
       created_at: b.createdAt,
     };
   });
@@ -39,6 +40,20 @@ export async function PATCH(request) {
   const body = await request.json().catch(() => ({}));
   const id = Number(body.id);
   if (!id) return NextResponse.json({ error: "id_required" }, { status: 400 });
+  // 来店記録だけの更新（来店済み／未来店／元に戻す）
+  if (body.action === "visit_status") {
+    try {
+      const row = await setOtaVisitStatus(id, body.visitStatus);
+      if (!row) return NextResponse.json({ error: "not_found" }, { status: 404 });
+      return NextResponse.json({ ok: true });
+    } catch (e) {
+      console.error("setOtaVisitStatus failed:", e.message);
+      return NextResponse.json(
+        { error: "save_failed", message: "保存に失敗しました。データベースの準備（visit_status 列の追加）が済んでいない可能性があります。" },
+        { status: 500 }
+      );
+    }
+  }
   let updated;
   try {
     updated = await updateOtaBlockDetails(id, body);
