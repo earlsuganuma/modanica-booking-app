@@ -3,6 +3,8 @@ const { withSentryConfig } = require("@sentry/nextjs");
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // メール受信（IMAP）用。バンドルせず、そのまま読み込む
+  serverExternalPackages: ["imapflow", "mailparser"],
 };
 
 module.exports = withSentryConfig(nextConfig, {

@@ -9,7 +9,8 @@
 ## [Unreleased]
 - OTA予約を、予約一覧に読み取り専用の行として表示（「OTA予約」フィルタ付き）。お客様名・人数・金額・メモを手入力で補える（ota_blocks に列を追加：scripts/add-ota-details.sql）
 - OTA予約を、Googleカレンダー（MODANICA予約）にも反映（変更分だけ更新、OTA側で消えたら予定も削除）
-- 【予定】OTAの予約通知メールを解析して、お客様名・人数・金額を自動で取り込む（メールの見本と受信方法の決定待ち）
+- Booking.comの通知メール（booking@modanica.net、さくらのIMAP・読み取り専用）から、予約番号・ゲスト名・ゲストからのメッセージを、OTA予約へ自動で入力（空欄のみ埋める。手入力は上書きしない）。要 npm パッケージ imapflow・mailparser と、環境変数 OTA_MAIL_IMAP_HOST / OTA_MAIL_USER / OTA_MAIL_PASSWORD。人数・金額は、通知メールに載っていないため手入力
+- バックアップの保存先を ~/app-backups に変更（~/backups は権限エラーのため）
 
 ## 0.3.0 — 2026-11
 - OTA連携（Booking.com・Airbnb のiCal取り込み／書き出し）：管理画面「OTA連携」、15分ごとのcron（/api/cron/ical-sync）、部屋の売り止めを空き判定に反映（lib/ical.js, icalSync.js, otaBlocks.js）
