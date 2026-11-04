@@ -181,7 +181,10 @@ export default function AdminReservationsPage() {
                     </div>
                   </div>
                   <div className="mt-2 grid sm:grid-cols-3 gap-2 text-sm text-black/60">
-                    <div>お客様：{o.guest_name || "（未入力）"}{o.guest_count != null ? `（${o.guest_count}名）` : ""}</div>
+                    <div>
+                      お客様：{o.guest_name || "（未入力）"}{o.guest_count != null ? `（${o.guest_count}名）` : ""}
+                      {o.booking_ref ? <span className="text-xs text-black/40">　予約番号 {o.booking_ref}</span> : null}
+                    </div>
                     <div>金額：{o.total_price != null ? `¥${Number(o.total_price).toLocaleString()}` : "（未入力）"}</div>
                     <div className="text-xs text-black/40 truncate">OTA表示：{o.summary || "-"}</div>
                   </div>
@@ -218,6 +221,7 @@ export default function AdminReservationsPage() {
                           id: o.id,
                           title: `${o.channel_label} ${o.room_label} ${o.start_date}〜${o.end_date}`,
                           guestName: o.guest_name || "",
+                          bookingRef: o.booking_ref || "",
                           guestCount: o.guest_count ?? "",
                           totalPrice: o.total_price ?? "",
                           memo: o.memo || "",
@@ -354,6 +358,11 @@ export default function AdminReservationsPage() {
               <span className="text-xs text-black/50">お客様名</span>
               <input value={otaEdit.guestName} onChange={(e) => setOtaEdit({ ...otaEdit, guestName: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" />
+            </label>
+            <label className="block">
+              <span className="text-xs text-black/50">予約番号（OTA）</span>
+              <input value={otaEdit.bookingRef || ""} onChange={(e) => setOtaEdit({ ...otaEdit, bookingRef: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-black/15 px-3 py-2" placeholder="例：5873912097" />
             </label>
             <div className="flex gap-3">
               <label className="block flex-1">
