@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const MAP_URL = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("長野県東御市和1093-2 MODANICA");
 
@@ -19,7 +19,7 @@ function Section({ title, children }) {
   );
 }
 
-function Ja() {
+function Ja({ official }) {
   return (
     <>
       <Section title="アクセス">
@@ -53,6 +53,7 @@ function Ja() {
           チェックアウト：10:30
         </p>
       </Section>
+      {!official && (
       <Section title="宿泊者名簿">
         <p>旅館業法により、すべての宿泊者様の名簿が必要です。ご到着前にご記入ください（1分ほどで完了します）。</p>
         <p>
@@ -60,8 +61,27 @@ function Ja() {
         </p>
         <p>外国の方は、国籍とパスポート番号が必要です（チェックイン時にパスポートを確認します）。</p>
       </Section>
+      )}
       <Section title="シャワーブース">
         <p>宿泊者の皆さまの共同利用です。複数組のご宿泊の日は、ご利用時間を設定します。</p>
+      </Section>
+      <Section title="部屋の仕様について">
+        <p>
+          ■ 1〜3人部屋（和室）
+          <br />
+          通常時は、ローテーブルとYogibo等のクッションでお過ごしいただき、就寝時に、布団とマットレスを、人数分お部屋に敷いてご利用いただきます。
+          <br />
+          ※3名でのご利用時は、部屋全体に布団が敷かれた状態になります。
+        </p>
+        <p>
+          ■ 4人部屋
+          <br />
+          ダブルベッド1台、セミダブルベッド1台（合計2台）
+          <br />
+          ※ベッドは連結も可能です。事前にお申し付けください。
+          <br />
+          テーブル1、チェア2
+        </p>
       </Section>
       <Section title="アメニティ">
         <p>
@@ -79,10 +99,20 @@ function Ja() {
       <Section title="フード＆ドリンク">
         <p>
           メニュー：<A href="https://order.modanica.net/menu">https://order.modanica.net/menu</A>
+        </p>
+        <p>
+          到着日のディナーをご希望の場合は、下記を事前予約にてご提供できます。
           <br />
-          飲み放題メニュー：<A href="https://cafe.modanica.net/assets/docs/drink-menu.pdf">https://cafe.modanica.net/assets/docs/drink-menu.pdf</A>
+          ・和牛ステーキディナーセット　+¥5,000
           <br />
-          カフェの営業時間・お休みは、Instagram（@cafe_modanica）でご案内しています。
+          ・2種類のソースの和牛ハンバーグディナーセット　+¥4,000
+          <br />
+          ・低温調理の柔らかポークグリルディナーセット　+¥3,500
+        </p>
+        <p>
+          ご希望の場合は、メッセージ等でお知らせください。
+          <br />
+          ※現地決済になります。
         </p>
       </Section>
       <Section title="近隣の温泉">
@@ -110,7 +140,7 @@ function Ja() {
   );
 }
 
-function En() {
+function En({ official }) {
   return (
     <>
       <Section title="Access">
@@ -144,6 +174,7 @@ function En() {
           Check-out: 10:30
         </p>
       </Section>
+      {!official && (
       <Section title="Guest register">
         <p>Japanese law requires a register of all guests. Please fill it in before arrival (about 1 minute).</p>
         <p>
@@ -151,8 +182,27 @@ function En() {
         </p>
         <p>Foreign guests need to enter nationality and passport number (we will check your passport at check-in).</p>
       </Section>
+      )}
       <Section title="Shower booth">
         <p>The shower booth is shared by all guests. When several parties stay on the same day, we will assign shower times.</p>
+      </Section>
+      <Section title="Rooms">
+        <p>
+          ■ Rooms for 1–3 guests (Japanese-style)
+          <br />
+          During the day, relax with a low table and cushions such as Yogibo. At bedtime, futons and mattresses are laid out in the room for each guest.
+          <br />
+          * With 3 guests, futons cover the entire room.
+        </p>
+        <p>
+          ■ Room for 4 guests
+          <br />
+          1 double bed and 1 semi-double bed (2 beds in total)
+          <br />
+          * The beds can be joined together. Please ask us in advance.
+          <br />
+          1 table, 2 chairs
+        </p>
       </Section>
       <Section title="Amenities">
         <p>
@@ -170,10 +220,20 @@ function En() {
       <Section title="Food & drinks">
         <p>
           Menu: <A href="https://order.modanica.net/menu">https://order.modanica.net/menu</A>
+        </p>
+        <p>
+          If you would like dinner on your arrival day, the following sets are available by advance reservation:
           <br />
-          All-you-can-drink menu: <A href="https://cafe.modanica.net/assets/docs/drink-menu.pdf">https://cafe.modanica.net/assets/docs/drink-menu.pdf</A>
+          - Wagyu steak dinner set +¥5,000
           <br />
-          Cafe hours and days off are posted on Instagram (@cafe_modanica).
+          - Wagyu hamburg steak dinner set with 2 kinds of sauce +¥4,000
+          <br />
+          - Tender low-temperature-cooked pork grill dinner set +¥3,500
+        </p>
+        <p>
+          Please let us know by message if you would like one.
+          <br />
+          * Paid on site.
         </p>
       </Section>
       <Section title="Nearby hot springs">
@@ -204,6 +264,10 @@ function En() {
 // ご宿泊のご案内ページ（日本語／English 切り替え）
 export default function GuideContent() {
   const [lang, setLang] = useState("ja");
+  const [official, setOfficial] = useState(false);
+  useEffect(() => {
+    setOfficial(new URLSearchParams(window.location.search).get("src") === "official");
+  }, []);
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -223,7 +287,7 @@ export default function GuideContent() {
           </button>
         </div>
       </div>
-      {lang === "ja" ? <Ja /> : <En />}
+      {lang === "ja" ? <Ja official={official} /> : <En official={official} />}
     </div>
   );
 }

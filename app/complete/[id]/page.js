@@ -22,6 +22,11 @@ export default async function CompletePage({ params }) {
         現在のステータスは「要確認」です。担当者が内容を確認のうえ、
         {r.customerEmail} 宛にご連絡いたします。
       </p>
+      {String((plan && (plan.timeType || plan.time_type)) || "").startsWith("stay_") && (
+        <p className="text-sm">
+          <a href="/guide?src=official" className="underline">ご宿泊のご案内（アクセス・お部屋・朝食など）を見る</a>
+        </p>
+      )}
       <a href="/" className="inline-block text-sm underline text-black/50">トップへ戻る</a>
     </div>
   );
