@@ -81,6 +81,39 @@ export default function AdminReportsPage() {
             </div>
           </div>
 
+          {report.otaUnpriced > 0 && (
+            <p className="rounded-xl bg-amber-50 text-amber-800 text-xs px-4 py-2">
+              金額が未入力のOTA予約が{report.otaUnpriced}件あります（売上は¥0で集計中）。予約一覧の「詳細・メモを編集」で、宿泊料金を入れてください。
+            </p>
+          )}
+
+          <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-black/5 font-bold text-sm">予約経路別内訳</div>
+            <table className="w-full text-sm">
+              <thead className="bg-black/5 text-black/50">
+                <tr>
+                  <th className="text-left px-4 py-2">経路</th>
+                  <th className="text-right px-4 py-2">件数</th>
+                  <th className="text-right px-4 py-2">確定売上</th>
+                  <th className="text-right px-4 py-2">見込み売上</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(report.bySource || []).map((x) => (
+                  <tr key={x.source} className="border-t border-black/5">
+                    <td className="px-4 py-2">{x.label}</td>
+                    <td className="px-4 py-2 text-right">{x.count}</td>
+                    <td className="px-4 py-2 text-right">¥{x.confirmed.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-right text-amber-700">¥{x.pending_review.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="px-5 py-2 text-xs text-black/40 border-t border-black/5">
+              OTAは、チェックイン日の月で集計します。金額は宿泊料金（宿泊税を除く、OTAの手数料を引く前）です。
+            </p>
+          </div>
+
           <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-black/5 font-bold text-sm">プラン別内訳</div>
             <table className="w-full text-sm">
