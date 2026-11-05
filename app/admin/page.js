@@ -33,20 +33,30 @@ function addDaysStr(dateStr, n) {
 
 export default function AdminDashboardPage() {
   const [reservations, setReservations] = useState([]);
+  const [otaList, setOtaList] = useState([]);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
 
   async function load() {
     setLoading(true);
     const today = todayDateStr();
-    const [resReservations, resReport] = await Promise.all([
+    const [resReservations, resReport, resOta] = await Promise.all([
       fetch("/api/admin/reservations", { cache: "no-store" }),
       fetch(`/api/admin/reports/revenue?year=${today.slice(0, 4)}&month=${Number(today.slice(5, 7))}`, {
         cache: "no-store",
       }),
+      // Booking.com・Airbnb など、OTA経由の予約（取得に失敗しても、ダッシュボードは表示する）
+      fetch("/api/admin/ota-reservations", { cache: "no-store" }).catch(() => null),
     ]);
     const dataReservations = await resReservations.json();
     const dataReport = await resReport.json();
+    let dataOta = {};
+    try {
+      dataOta = resOta && resOta.ok ? await resOta.json() : {};
+    } catch (e) {
+      dataOta = {};
+    }
+    setOtaList(dataOta.reservations || []);
     setReservations(dataReservations.reservations || []);
     setReport(dataReport);
     setLoading(false);
@@ -70,29 +80,47 @@ export default function AdminDashboardPage() {
     load();
   }
 
+  async function setOtaVisit(id, visitStatus) {
+    const res = await fetch("/api/admin/ota-reservations", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action: "visit_status", visitStatus }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.message || "処理に失敗しました。");
+    }
+    load();
+  }
+
   const today = todayDateStr();
   const weekLater = addDaysStr(today, 7);
 
-  const todayList = useMemo(
-    () =>
-      reservations
-        .filter((r) => r.status !== "cancelled" && r.start_datetime.slice(0, 10) === today)
-        .sort((a, b) => a.start_datetime.localeCompare(b.start_datetime)),
-    [reservations, today]
-  );
+  // 自社予約とOTA予約を、日時順にまとめて表示する（OTAはチェックイン日の16:00として並べる）
+  const todayList = useMemo(() => {
+    const own = reservations
+      .filter((r) => r.status !== "cancelled" && r.start_datetime.slice(0, 10) === today)
+      .map((r) => ({ kind: "own", key: `own-${r.id}`, sort: r.start_datetime, r }));
+    const ota = otaList
+      .filter((b) => b.start_date === today)
+      .map((b) => ({ kind: "ota", key: `ota-${b.id}`, sort: `${b.start_date}T16:00`, b }));
+    return [...own, ...ota].sort((a, b) => a.sort.localeCompare(b.sort));
+  }, [reservations, otaList, today]);
 
-  const upcomingList = useMemo(
-    () =>
-      reservations
-        .filter(
-          (r) =>
-            r.status !== "cancelled" &&
-            r.start_datetime.slice(0, 10) > today &&
-            r.start_datetime.slice(0, 10) <= weekLater
-        )
-        .sort((a, b) => a.start_datetime.localeCompare(b.start_datetime)),
-    [reservations, today, weekLater]
-  );
+  const upcomingList = useMemo(() => {
+    const own = reservations
+      .filter(
+        (r) =>
+          r.status !== "cancelled" &&
+          r.start_datetime.slice(0, 10) > today &&
+          r.start_datetime.slice(0, 10) <= weekLater
+      )
+      .map((r) => ({ kind: "own", key: `own-${r.id}`, sort: r.start_datetime, r }));
+    const ota = otaList
+      .filter((b) => b.start_date > today && b.start_date <= weekLater)
+      .map((b) => ({ kind: "ota", key: `ota-${b.id}`, sort: `${b.start_date}T16:00`, b }));
+    return [...own, ...ota].sort((a, b) => a.sort.localeCompare(b.sort));
+  }, [reservations, otaList, today, weekLater]);
 
   const pendingCount = useMemo(
     () => reservations.filter((r) => r.status === "pending_review").length,
@@ -136,6 +164,47 @@ export default function AdminDashboardPage() {
     );
   }
 
+  function OtaRow({ b }) {
+    const reg = (b.registry || []).length > 0;
+    return (
+      <div className="rounded-2xl bg-white p-4 shadow-sm border-l-4 border-amber-400">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs rounded-full bg-amber-100 px-2 py-0.5">{b.channel_label}</span>
+            <span className="font-bold">{b.room_label}</span>
+            <span className={`text-xs rounded-full px-2 py-0.5 ${reg ? "bg-emerald-100 text-emerald-800" : "bg-black/5 text-black/50"}`}>
+              {reg ? "名簿入力済み" : "名簿未入力"}
+            </span>
+            {b.visit_status === "visited" && <span className="badge badge-confirmed">来店済み</span>}
+            {b.visit_status === "no_show" && <span className="badge badge-cancelled">未来店</span>}
+          </div>
+          <div className="text-sm text-black/50">
+            {b.start_date} IN 〜 {b.end_date} OUT（{b.nights}泊）
+          </div>
+        </div>
+        <div className="mt-2 text-sm text-black/60">
+          お客様：{b.guest_name || "（未入力）"}
+          {b.guest_count ? `（${b.guest_count}名）` : ""} / {b.total_price != null ? `¥${Number(b.total_price).toLocaleString()}` : "金額：未入力"}
+          {b.booking_ref ? <span className="text-black/40"> / 予約番号 {b.booking_ref}</span> : null}
+        </div>
+        {b.memo ? <div className="mt-1 text-xs text-black/40 whitespace-pre-wrap line-clamp-3">{b.memo}</div> : null}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a href="/admin/reservations" className="text-xs rounded-full border border-black/20 px-4 py-1.5 hover:bg-black/5">
+            予約一覧で詳細・名簿を見る
+          </a>
+          {b.visit_status !== "visited" && (
+            <button
+              onClick={() => setOtaVisit(b.id, "visited")}
+              className="text-xs rounded-full bg-emerald-600 text-white px-4 py-1.5 hover:opacity-90"
+            >
+              来店済みにする
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <AdminNav />
@@ -150,7 +219,7 @@ export default function AdminDashboardPage() {
         <>
           <div className="grid sm:grid-cols-4 gap-3">
             <div className="rounded-2xl bg-white p-5 shadow-sm">
-              <div className="text-xs text-black/40">今日の予約</div>
+              <div className="text-xs text-black/40">今日の予約（OTA含む）</div>
               <div className="text-2xl font-bold mt-1">{todayList.length}件</div>
             </div>
             <div className="rounded-2xl bg-white p-5 shadow-sm">
@@ -186,7 +255,7 @@ export default function AdminDashboardPage() {
             {todayList.length === 0 ? (
               <p className="text-sm text-black/40">今日の予約はありません。</p>
             ) : (
-              todayList.map((r) => <ReservationRow key={r.id} r={r} />)
+              todayList.map((it) => (it.kind === "ota" ? <OtaRow key={it.key} b={it.b} /> : <ReservationRow key={it.key} r={it.r} />))
             )}
           </div>
 
@@ -195,7 +264,7 @@ export default function AdminDashboardPage() {
             {upcomingList.length === 0 ? (
               <p className="text-sm text-black/40">今後7日間の予約はありません。</p>
             ) : (
-              upcomingList.map((r) => <ReservationRow key={r.id} r={r} />)
+              upcomingList.map((it) => (it.kind === "ota" ? <OtaRow key={it.key} b={it.b} /> : <ReservationRow key={it.key} r={it.r} />))
             )}
           </div>
         </>
