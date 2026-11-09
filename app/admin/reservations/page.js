@@ -361,6 +361,15 @@ export default function AdminReservationsPage() {
                       仮予約（優先予約の受付期間中）
                     </span>
                   )}
+                  {r.room_stay_overlaps && r.room_stay_overlaps.length > 0 && (
+                    <span
+                      className="badge"
+                      style={{ background: "#fee2e2", color: "#991b1b" }}
+                      title={r.room_stay_overlaps.join("\n")}
+                    >
+                      要調整：同じ夜に小部屋の宿泊あり
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm text-black/50">
                   {r.start_datetime.replace("T", " ")} 〜 {r.end_datetime.replace("T", " ")}

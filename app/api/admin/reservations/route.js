@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 const { load } = require("../../../../lib/store");
 const { computeAtRisk } = require("../../../../lib/priorityRisk");
 const { buildRepeatCounter } = require("../../../../lib/repeater");
+const { roomStayOverlaps } = require("../../../../lib/roomLinks");
+const { listOtaBlocks, channelLabel } = require("../../../../lib/otaBlocks");
 
 const { save } = require("../../../../lib/store");
 const { syncReservation } = require("../../../../lib/googleCalendar");
@@ -158,6 +160,13 @@ export async function POST(request) {
 export async function GET() {
   const data = await load();
   const repeatCount = buildRepeatCounter(data.reservations);
+  // 飲み会貸切・夜BBQと同じ時間帯に、小部屋の宿泊（自社・OTA）がないか調べるため、OTAの予約も読む（失敗しても一覧は返す）
+  let otaBlocks = [];
+  try {
+    otaBlocks = (await listOtaBlocks()).map((b) => ({ ...b, channelLabel: channelLabel(b.channel) }));
+  } catch (e) {
+    otaBlocks = [];
+  }
   const reservations = [...data.reservations]
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .map((r) => {
@@ -199,6 +208,7 @@ export async function GET() {
         total_price: r.totalPrice,
         created_at: r.createdAt,
         at_risk: r.status !== "cancelled" ? computeAtRisk(data, r) : false,
+        room_stay_overlaps: roomStayOverlaps(r, data, otaBlocks),
       };
     });
   return NextResponse.json({ reservations });

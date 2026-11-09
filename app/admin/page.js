@@ -138,7 +138,12 @@ export default function AdminDashboardPage() {
             <a href={`/admin/reservations/${r.id}`} className="font-bold hover:underline">
               {r.plan_name}
             </a>{" "}
-            <span className={STATUS_BADGE[r.status]}>{STATUS_LABEL[r.status]}</span>
+            <span className={STATUS_BADGE[r.status]}>{STATUS_LABEL[r.status]}</span>{" "}
+            {r.room_stay_overlaps && r.room_stay_overlaps.length > 0 && (
+              <span className="badge" style={{ background: "#fee2e2", color: "#991b1b" }} title={r.room_stay_overlaps.join("\n")}>
+                要調整：同じ夜に小部屋の宿泊あり
+              </span>
+            )}
           </div>
           <div className="text-sm text-black/50">
             {r.start_datetime.slice(0, 10)} {r.start_datetime.slice(11, 16)} 〜 {r.end_datetime.slice(11, 16)}
@@ -147,6 +152,9 @@ export default function AdminDashboardPage() {
         <div className="mt-2 text-sm text-black/60">
           お客様：{r.customer_name}（{r.guest_count}名） / ¥{r.total_price.toLocaleString()}
         </div>
+        {r.room_stay_overlaps && r.room_stay_overlaps.length > 0 && (
+          <div className="mt-1 text-xs text-red-700">同じ夜の小部屋の宿泊：{r.room_stay_overlaps.join("、")}</div>
+        )}
         <div className="mt-3 flex flex-wrap gap-2">
           <a href={`/admin/reservations/${r.id}`} className="text-xs rounded-full border border-black/20 px-4 py-1.5 hover:bg-black/5">
             詳細を見る
