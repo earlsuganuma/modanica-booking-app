@@ -7,6 +7,7 @@
 - デプロイ前に VPS のアプリが `~/app-backups/` に自動保存される（直近10世代）。
 
 ## [Unreleased]
+- カード決済の「JCB・AMEX・DINERSは利用不可」の案内を、予約フォームと特定商取引法ページから削除（JCB等が使えるようになったため）
 - OTA予約を、予約一覧に読み取り専用の行として表示（「OTA予約」フィルタ付き）。お客様名・人数・金額・メモを手入力で補える（ota_blocks に列を追加：scripts/add-ota-details.sql）
 - OTA予約を、Googleカレンダー（MODANICA予約）にも反映（変更分だけ更新、OTA側で消えたら予定も削除）
 - Booking.comの通知メール（booking@modanica.net、さくらのIMAP・読み取り専用）から、予約番号・ゲスト名・ゲストからのメッセージを、OTA予約へ自動で入力（空欄のみ埋める。手入力は上書きしない）。要 npm パッケージ imapflow・mailparser と、環境変数 OTA_MAIL_IMAP_HOST / OTA_MAIL_USER / OTA_MAIL_PASSWORD。人数・金額は、通知メールに載っていないため手入力
